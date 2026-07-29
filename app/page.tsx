@@ -380,10 +380,12 @@ export default function Home() {
         try {
           const parsed = JSON.parse(event.target?.result as string);
           if (parsed.transactions && Array.isArray(parsed.transactions)) {
+            const importedBalance = typeof parsed.initialBalance === "number" ? parsed.initialBalance : initialBalance;
+            const importedLaunchDate = parsed.launchDateStr || launchDateStr;
             setTransactions(parsed.transactions);
-            if (parsed.initialBalance) setInitialBalance(Number(parsed.initialBalance));
-            if (parsed.launchDateStr) setLaunchDateStr(parsed.launchDateStr);
-            saveToStorage(parsed.transactions, parsed.initialBalance || initialBalance, parsed.launchDateStr || launchDateStr);
+            setInitialBalance(importedBalance);
+            setLaunchDateStr(importedLaunchDate);
+            saveToStorage(parsed.transactions, importedBalance, importedLaunchDate);
             alert("Transactions and parameters imported successfully!");
           } else {
             alert("Invalid configuration structure.");
@@ -2597,7 +2599,7 @@ export default function Home() {
                         </div>
                         <div className="text-right">
                           <span className={`text-xs font-mono font-bold ${t.item.category === "income" ? "text-emerald-400" : "text-rose-400"}`}>
-                            {t.item.category === "income" ? "+" : "-"}${t.amount.toLocaleString("en-US")}
+                            {t.item.category === "income" ? "+" : "-"}${Math.abs(t.amount).toLocaleString("en-US")}
                           </span>
                         </div>
                       </div>
