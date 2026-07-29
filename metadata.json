@@ -1,0 +1,6 @@
+{
+  "name": "Recurring Transactions Forecast",
+  "description": "A web-based PWA forecasting tool for managing and predicting recurring incoming and outgoing transactions, savings, and remaining spendable amount.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
