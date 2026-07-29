@@ -194,13 +194,14 @@ export function generateForecast({
           dayTransactions.push({ item: t, amount: -amt });
           
           if (t.category === 'liability') {
-            // Paid from funding account (checking/savings)
+            const targetAccId = t.targetAccountId;
+            const owed = targetAccId ? (currentBalances[targetAccId] ?? amt) : amt;
+            const appliedAmt = Math.min(amt, Math.max(0, owed));
+
             const fundAccId = t.fundingAccountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
             if (fundAccId && currentBalances[fundAccId] !== undefined) {
-              currentBalances[fundAccId] -= amt;
+              currentBalances[fundAccId] -= appliedAmt;
             }
-            // Reduce target credit liability account outstanding balance (bringing it closer to zero)
-            const targetAccId = t.targetAccountId;
             if (targetAccId && currentBalances[targetAccId] !== undefined) {
               currentBalances[targetAccId] = Math.max(0, currentBalances[targetAccId] - amt);
             }
