@@ -27,7 +27,8 @@ import {
   ArrowRight,
   Info,
   Menu,
-  Layers
+  Layers,
+  CreditCard
 } from "lucide-react";
 import { 
   RecurringTransaction, 
@@ -36,7 +37,9 @@ import {
   DEFAULT_TRANSACTIONS, 
   SAMPLE_TRANSACTIONS,
   formatDateLocal, 
-  parseDateLocal 
+  parseDateLocal,
+  Account,
+  SAMPLE_ACCOUNTS
 } from "@/lib/forecast";
 
 function generateId(): string {
@@ -47,14 +50,27 @@ export default function Home() {
   const [mounted, setMounted] = useState<boolean>(false);
 
   // Navigation State
-  const [activeTab, setActiveTab] = useState<"dashboard" | "income" | "expenses" | "liabilities">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "accounts" | "income" | "expenses" | "liabilities">("dashboard");
   const [expenseSubTab, setExpenseSubTab] = useState<"all" | "fixed" | "subscriptions" | "savings">("all");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Core Data State
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<RecurringTransaction[]>([]);
-  const [initialBalance, setInitialBalance] = useState<number>(0);
   const [launchDateStr, setLaunchDateStr] = useState<string>("2026-07-28");
+
+  // Derive initial balance dynamically as net sum of checking + savings + other cash, minus credit card outstanding liabilities
+  const initialBalance = useMemo(() => {
+    return accounts.reduce((acc, curr) => {
+      if (curr.type === "credit-card") {
+        return acc - curr.balance;
+      }
+      return acc + curr.balance;
+    }, 0);
+  }, [accounts]);
+
+  // Selected account filter for dashboard timeline (empty string means show Net Cash Balance)
+  const [dashboardAccountFilter, setDashboardAccountFilter] = useState<string>("");
 
   // Timeframe View Filter for the Dashboard
   const [forecastRange, setForecastRange] = useState<"week" | "two-weeks" | "month" | "quarter">("month");
@@ -75,9 +91,53 @@ export default function Home() {
   const [formFrequency, setFormFrequency] = useState<string>("monthly");
   const [formSemiDays, setFormSemiDays] = useState<string>("1,15");
   const [formNotes, setFormNotes] = useState<string>("");
+  const [formAccountId, setFormAccountId] = useState<string>("");
+  const [formFundingAccountId, setFormFundingAccountId] = useState<string>("");
+  const [formTargetAccountId, setFormTargetAccountId] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [wizardError, setWizardError] = useState<string | null>(null);
+
+  // Main Accounts tab form state
+  const [accFormName, setAccFormName] = useState<string>("");
+  const [accFormType, setAccFormType] = useState<"checking" | "savings" | "credit-card" | "other">("checking");
+  const [accFormCustomType, setAccFormCustomType] = useState<string>("");
+  const [accFormBalance, setAccFormBalance] = useState<string>("");
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [isAddingAccount, setIsAddingAccount] = useState<boolean>(false);
+  const [accFormError, setAccFormError] = useState<string | null>(null);
+
+  // Onboarding full-screen wizard state
+  const [wizActiveStep, setWizActiveStep] = useState<number>(0);
+  const [wizAccounts, setWizAccounts] = useState<Account[]>([]);
+  const [wizTransactions, setWizTransactions] = useState<RecurringTransaction[]>([]);
+  const [wizError, setWizError] = useState<string | null>(null);
+
+  // Wizard Accounts input state
+  const [wizAccName, setWizAccName] = useState<string>("");
+  const [wizAccType, setWizAccType] = useState<"checking" | "savings" | "credit-card" | "other">("checking");
+  const [wizAccCustomType, setWizAccCustomType] = useState<string>("");
+  const [wizAccBalance, setWizAccBalance] = useState<string>("");
+
+  // Wizard Transaction inline form states
+  const [wizTitle, setWizTitle] = useState<string>("");
+  const [wizAmount, setWizAmount] = useState<string>("");
+  const [wizStartDate, setWizStartDate] = useState<string>("");
+  const [wizFrequency, setWizFrequency] = useState<string>("monthly");
+  const [wizSemiDays, setWizSemiDays] = useState<string>("1,15");
+  const [wizExpenseType, setWizExpenseType] = useState<"fixed-expense" | "subscription">("fixed-expense");
+  const [wizAccountId, setWizAccountId] = useState<string>("");
+  const [wizFundingAccountId, setWizFundingAccountId] = useState<string>("");
+  const [wizTargetAccountId, setWizTargetAccountId] = useState<string>("");
+
+  // Summary Savings states
+  const [wizSavingsTitle, setWizSavingsTitle] = useState<string>("General Savings Contribution");
+  const [wizSavingsAmount, setWizSavingsAmount] = useState<string>("200");
+  const [wizSavingsFrequency, setWizSavingsFrequency] = useState<string>("monthly");
+  const [wizSavingsStartDate, setWizSavingsStartDate] = useState<string>("");
+  const [wizSavingsEnabled, setWizSavingsEnabled] = useState<boolean>(true);
+  const [wizSavingsAccountId, setWizSavingsAccountId] = useState<string>(""); // Target Savings account for savings routing
+  const [wizSavingsFundingId, setWizSavingsFundingId] = useState<string>(""); // Funding account for savings transfer
 
   // Client hydration effect
   useEffect(() => {
@@ -86,22 +146,41 @@ export default function Home() {
       if (typeof window !== "undefined") {
         const todayStr = formatDateLocal(new Date());
         
-        const storedTx = localStorage.getItem("futureflow_transactions");
+        const storedTx = localStorage.getItem("personal_forecast_transactions");
         if (storedTx) {
           try {
             setTransactions(JSON.parse(storedTx));
           } catch (e) {}
+        } else {
+          // Fallback migration from old storage keys
+          const legacyTx = localStorage.getItem("futureflow_transactions");
+          if (legacyTx) {
+            try {
+              setTransactions(JSON.parse(legacyTx));
+            } catch (e) {}
+          }
         }
 
-        const storedBal = localStorage.getItem("futureflow_initial_balance");
-        if (storedBal !== null && storedBal !== undefined) {
-          setInitialBalance(Number(storedBal));
+        const storedAccounts = localStorage.getItem("personal_forecast_accounts");
+        if (storedAccounts) {
+          try {
+            setAccounts(JSON.parse(storedAccounts));
+          } catch (e) {}
+        } else {
+          // Backward compatibility migration: create a primary checking account with initial balance
+          const storedBal = localStorage.getItem("futureflow_initial_balance");
+          const balanceNum = storedBal !== null && storedBal !== undefined ? Number(storedBal) : 0;
+          setAccounts([
+            { id: "acc_checking", name: "Primary Checking", type: "checking", balance: balanceNum }
+          ]);
         }
 
         const storedLaunch = localStorage.getItem("futureflow_launch_date");
         const activeLaunchStr = storedLaunch || todayStr;
         setLaunchDateStr(activeLaunchStr);
         setFormStartDate(activeLaunchStr);
+        setWizStartDate(activeLaunchStr);
+        setWizSavingsStartDate(activeLaunchStr);
 
         const d = parseDateLocal(activeLaunchStr);
         setCalendarYear(d.getFullYear());
@@ -112,27 +191,43 @@ export default function Home() {
   }, []);
 
   // Save state helper
-  const saveToStorage = (updatedTx: RecurringTransaction[], updatedBal: number, updatedDate: string) => {
+  const saveToStorage = (updatedTx: RecurringTransaction[], updatedDate: string, updatedAccounts: Account[]) => {
     if (typeof window !== "undefined") {
-      localStorage.setItem("futureflow_transactions", JSON.stringify(updatedTx));
-      localStorage.setItem("futureflow_initial_balance", String(updatedBal));
-      localStorage.setItem("futureflow_launch_date", updatedDate);
+      localStorage.setItem("personal_forecast_transactions", JSON.stringify(updatedTx));
+      localStorage.setItem("personal_forecast_launch_date", updatedDate);
+      localStorage.setItem("personal_forecast_accounts", JSON.stringify(updatedAccounts));
     }
   };
 
   const updateTransactions = (newTx: RecurringTransaction[]) => {
     setTransactions(newTx);
-    saveToStorage(newTx, initialBalance, launchDateStr);
+    saveToStorage(newTx, launchDateStr, accounts);
+  };
+
+  const updateAccountsState = (newAccs: Account[]) => {
+    setAccounts(newAccs);
+    saveToStorage(transactions, launchDateStr, newAccs);
   };
 
   const updateInitialBalance = (bal: number) => {
-    setInitialBalance(bal);
-    saveToStorage(transactions, bal, launchDateStr);
+    let updated = [...accounts];
+    if (updated.length > 0) {
+      updated = updated.map((acc, idx) => {
+        if (idx === 0 || acc.type === "checking") {
+          return { ...acc, balance: bal };
+        }
+        return acc;
+      });
+    } else {
+      updated.push({ id: "acc_checking", name: "Primary Checking", type: "checking", balance: bal });
+    }
+    setAccounts(updated);
+    saveToStorage(transactions, launchDateStr, updated);
   };
 
   const updateLaunchDate = (dateStr: string) => {
     setLaunchDateStr(dateStr);
-    saveToStorage(transactions, initialBalance, dateStr);
+    saveToStorage(transactions, dateStr, accounts);
     
     // Auto-adjust traditional calendar view to match the selected Starting Date
     const d = parseDateLocal(dateStr);
@@ -143,15 +238,16 @@ export default function Home() {
   const handleClearData = () => {
     if (confirm("Clear all transactions and reset data to start fresh?")) {
       setTransactions([]);
-      setInitialBalance(0);
-      saveToStorage([], 0, launchDateStr);
+      const defaultAccs: Account[] = [{ id: "acc_checking", name: "Primary Checking", type: "checking", balance: 0 }];
+      setAccounts(defaultAccs);
+      saveToStorage([], launchDateStr, defaultAccs);
     }
   };
 
   const handleLoadSampleData = () => {
     setTransactions(SAMPLE_TRANSACTIONS);
-    setInitialBalance(5000);
-    saveToStorage(SAMPLE_TRANSACTIONS, 5000, launchDateStr);
+    setAccounts(SAMPLE_ACCOUNTS);
+    saveToStorage(SAMPLE_TRANSACTIONS, launchDateStr, SAMPLE_ACCOUNTS);
   };
 
   // Dynamic forecast timelines depending on the user's view selection
@@ -166,10 +262,10 @@ export default function Home() {
     return generateForecast({
       startDate: start,
       numberOfDays: days,
-      initialBalance,
+      accounts,
       transactions,
     });
-  }, [launchDateStr, forecastRange, initialBalance, transactions]);
+  }, [launchDateStr, forecastRange, accounts, transactions]);
 
   // A 120-day horizon forecast timeline specifically for looking up calendar days
   const calendarForecastTimeline = useMemo(() => {
@@ -184,10 +280,10 @@ export default function Home() {
     return generateForecast({
       startDate: simStart,
       numberOfDays: simDays,
-      initialBalance,
+      accounts,
       transactions,
     });
-  }, [calendarYear, calendarMonth, launchDateStr, initialBalance, transactions]);
+  }, [calendarYear, calendarMonth, launchDateStr, accounts, transactions]);
 
   // Traditional Month Calendar Cell Grid
   const calendarCells = useMemo(() => {
@@ -227,14 +323,24 @@ export default function Home() {
       forecastTimeline.forEach((day, idx) => {
         day.transactions.forEach(tx => {
           const amt = Math.abs(tx.amount);
-          if (tx.item.category === "income") income += amt;
-          else if (tx.item.category === "fixed-expense") fixedExpenses += amt;
-          else if (tx.item.category === "subscription") subscriptions += amt;
-          else if (tx.item.category === "liability") liabilities += amt;
-          else if (tx.item.category === "savings") savings += amt;
+          // If filtering, only sum up if this transaction is linked to the selected account
+          const matchesFilter = !dashboardAccountFilter || 
+            tx.item.accountId === dashboardAccountFilter || 
+            tx.item.fundingAccountId === dashboardAccountFilter || 
+            tx.item.targetAccountId === dashboardAccountFilter;
+
+          if (matchesFilter) {
+            if (tx.item.category === "income") income += amt;
+            else if (tx.item.category === "fixed-expense") fixedExpenses += amt;
+            else if (tx.item.category === "subscription") subscriptions += amt;
+            else if (tx.item.category === "liability") liabilities += amt;
+            else if (tx.item.category === "savings") savings += amt;
+          }
         });
         if (idx === forecastTimeline.length - 1) {
-          endingBalance = day.endingBalance;
+          endingBalance = dashboardAccountFilter && day.accountBalances
+            ? (day.accountBalances[dashboardAccountFilter] ?? 0)
+            : day.endingBalance;
         }
       });
     } else {
@@ -244,15 +350,25 @@ export default function Home() {
         const day = cell.forecast!;
         day.transactions.forEach(tx => {
           const amt = Math.abs(tx.amount);
-          if (tx.item.category === "income") income += amt;
-          else if (tx.item.category === "fixed-expense") fixedExpenses += amt;
-          else if (tx.item.category === "subscription") subscriptions += amt;
-          else if (tx.item.category === "liability") liabilities += amt;
-          else if (tx.item.category === "savings") savings += amt;
+          const matchesFilter = !dashboardAccountFilter || 
+            tx.item.accountId === dashboardAccountFilter || 
+            tx.item.fundingAccountId === dashboardAccountFilter || 
+            tx.item.targetAccountId === dashboardAccountFilter;
+
+          if (matchesFilter) {
+            if (tx.item.category === "income") income += amt;
+            else if (tx.item.category === "fixed-expense") fixedExpenses += amt;
+            else if (tx.item.category === "subscription") subscriptions += amt;
+            else if (tx.item.category === "liability") liabilities += amt;
+            else if (tx.item.category === "savings") savings += amt;
+          }
         });
       });
       if (activeDays.length > 0) {
-        endingBalance = activeDays[activeDays.length - 1].forecast!.endingBalance;
+        const lastDay = activeDays[activeDays.length - 1].forecast!;
+        endingBalance = dashboardAccountFilter && lastDay.accountBalances
+          ? (lastDay.accountBalances[dashboardAccountFilter] ?? 0)
+          : lastDay.endingBalance;
       }
     }
 
@@ -267,7 +383,7 @@ export default function Home() {
       spending,
       endingBalance
     };
-  }, [forecastRange, forecastTimeline, calendarCells, initialBalance]);
+  }, [forecastRange, forecastTimeline, calendarCells, initialBalance, dashboardAccountFilter]);
 
   // Navigation month handlers
   const handlePrevMonth = () => {
@@ -309,6 +425,9 @@ export default function Home() {
       category: formCategory,
       semiMonthlyDays: formFrequency === "semimonthly" ? updatedSemiDays : undefined,
       notes: formNotes.trim(),
+      accountId: formAccountId || undefined,
+      fundingAccountId: formFundingAccountId || undefined,
+      targetAccountId: formTargetAccountId || undefined,
     };
 
     let updatedTx: RecurringTransaction[];
@@ -329,6 +448,9 @@ export default function Home() {
     setFormFrequency("monthly");
     setFormSemiDays("1,15");
     setFormNotes("");
+    setFormAccountId("");
+    setFormFundingAccountId("");
+    setFormTargetAccountId("");
     setEditingId(null);
     setWizardStep(1);
     setWizardError(null);
@@ -344,6 +466,9 @@ export default function Home() {
     setFormCategory(tx.category);
     setFormSemiDays(tx.semiMonthlyDays?.join(",") || "1,15");
     setFormNotes(tx.notes || "");
+    setFormAccountId(tx.accountId || "");
+    setFormFundingAccountId(tx.fundingAccountId || "");
+    setFormTargetAccountId(tx.targetAccountId || "");
     setWizardStep(1);
     setWizardError(null);
     setIsAddingTransaction(true);
@@ -360,9 +485,9 @@ export default function Home() {
   // JSON Export/Import PWA utilities
   const handleExportData = () => {
     const dataStr = JSON.stringify({
-      version: "1.0",
-      initialBalance,
+      version: "1.1",
       launchDateStr,
+      accounts,
       transactions
     }, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
@@ -380,11 +505,19 @@ export default function Home() {
         try {
           const parsed = JSON.parse(event.target?.result as string);
           if (parsed.transactions && Array.isArray(parsed.transactions)) {
+            const importedLaunchDate = parsed.launchDateStr || launchDateStr;
+            let importedAccounts: Account[] = [];
+            if (parsed.accounts && Array.isArray(parsed.accounts)) {
+              importedAccounts = parsed.accounts;
+            } else {
+              const legacyBalance = typeof parsed.initialBalance === "number" ? parsed.initialBalance : initialBalance;
+              importedAccounts = [{ id: "acc_checking", name: "Primary Checking", type: "checking", balance: legacyBalance }];
+            }
             setTransactions(parsed.transactions);
-            if (parsed.initialBalance) setInitialBalance(Number(parsed.initialBalance));
-            if (parsed.launchDateStr) setLaunchDateStr(parsed.launchDateStr);
-            saveToStorage(parsed.transactions, parsed.initialBalance || initialBalance, parsed.launchDateStr || launchDateStr);
-            alert("Transactions and parameters imported successfully!");
+            setAccounts(importedAccounts);
+            setLaunchDateStr(importedLaunchDate);
+            saveToStorage(parsed.transactions, importedLaunchDate, importedAccounts);
+            alert("Configuration, accounts, and transactions imported successfully!");
           } else {
             alert("Invalid configuration structure.");
           }
@@ -426,46 +559,149 @@ export default function Home() {
   }
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden bg-[#070709] text-zinc-100 font-sans relative">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#070709] text-zinc-100 font-sans relative">
       
-      {/* MOBILE TOP NAVIGATION BAR (< md) */}
-      <header className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-zinc-950/95 backdrop-blur-md border-b border-white/10 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-900 border border-white/15 shadow-sm text-indigo-400">
-            <CalendarIcon className="w-4 h-4" />
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-white leading-none">ForecastPWA</h1>
-            <span className="text-xs font-mono text-zinc-300 uppercase mt-0.5 block font-medium">Cash Engine</span>
-          </div>
-        </div>
+      {/* RESPONSIVE TOP NAVIGATION BAR (unified for both desktop and mobile) */}
+      {transactions.length > 0 && (
+        <header className="sticky top-0 z-30 w-full bg-zinc-950/85 backdrop-blur-md border-b border-white/5 shrink-0">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+            
+            {/* Logo & branding */}
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-900 border border-white/10 shadow-sm text-indigo-400 shrink-0">
+                <CalendarIcon className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-sm font-bold text-white tracking-tight leading-none">Financial OS</h1>
+                <span className="text-[9px] font-mono text-zinc-500 uppercase mt-0.5 block font-medium">Cash Engine</span>
+              </div>
+            </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              setFormCategory("income");
-              setFormStartDate(launchDateStr);
-              setIsAddingTransaction(true);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md transition-all active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add</span>
-          </button>
+            {/* Desktop Navigation Tabs (visible on md+) */}
+            <nav className="hidden md:flex items-center gap-1.5 bg-zinc-900/30 border border-white/5 p-1 rounded-2xl">
+              <button
+                onClick={() => setActiveTab("dashboard")}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all text-xs font-semibold ${
+                  activeTab === "dashboard"
+                    ? "bg-zinc-900 text-white border border-white/10 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200 border border-transparent"
+                }`}
+              >
+                <CalendarIcon className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Dashboard</span>
+              </button>
 
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2.5 rounded-xl bg-zinc-900 border border-white/15 text-zinc-200 hover:text-white transition-colors"
-            aria-label="Toggle navigation menu"
-          >
-            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-        </div>
-      </header>
+              <button
+                onClick={() => setActiveTab("accounts")}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all text-xs font-semibold ${
+                  activeTab === "accounts"
+                    ? "bg-zinc-900 text-white border border-white/10 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200 border border-transparent"
+                }`}
+              >
+                <Wallet className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Accounts ({accounts.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab("income")}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all text-xs font-semibold ${
+                  activeTab === "income"
+                    ? "bg-zinc-900 text-white border border-white/10 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200 border border-transparent"
+                }`}
+              >
+                <Coins className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Income ({categorizedTransactions.income.length})</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab("expenses");
+                  setExpenseSubTab("all");
+                }}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all text-xs font-semibold ${
+                  activeTab === "expenses"
+                    ? "bg-zinc-900 text-white border border-white/10 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200 border border-transparent"
+                }`}
+              >
+                <TrendingDown className="w-3.5 h-3.5 text-rose-400" />
+                <span>Expenses ({categorizedTransactions.fixedExpenses.length + categorizedTransactions.subscriptions.length + categorizedTransactions.savings.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab("liabilities")}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all text-xs font-semibold ${
+                  activeTab === "liabilities"
+                    ? "bg-zinc-900 text-white border border-white/10 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200 border border-transparent"
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <span>Liabilities ({categorizedTransactions.liabilities.length})</span>
+              </button>
+            </nav>
+
+            {/* Right Desktop Actions & Hamburger menu for mobile */}
+            <div className="flex items-center gap-2.5">
+              
+              {/* Desktop Actions (visible on lg+) */}
+              <div className="hidden lg:flex items-center gap-2">
+                <button
+                  onClick={handleExportData}
+                  title="Export Data"
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-white/5 text-zinc-300 hover:text-white text-xs font-medium font-mono transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export</span>
+                </button>
+                <label
+                  title="Import Data"
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-white/5 text-zinc-300 hover:text-white text-xs font-medium font-mono transition-colors cursor-pointer animate-none"
+                >
+                  <Upload className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Import</span>
+                  <input type="file" accept=".json" onChange={handleImportData} className="hidden" />
+                </label>
+
+                <div className="w-px h-5 bg-white/10 mx-1"></div>
+
+                <button
+                  onClick={handleClearData}
+                  title="Clear Database"
+                  className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 text-rose-400 text-xs font-medium font-mono transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear</span>
+                </button>
+                <button
+                  onClick={handleLoadSampleData}
+                  title="Load Sample Datasets"
+                  className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-950/20 hover:bg-indigo-950/40 border border-indigo-500/20 text-indigo-400 text-xs font-medium font-mono transition-all"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Sample</span>
+                </button>
+              </div>
+
+              {/* Mobile / Tablet Menu Button (< md) */}
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="md:hidden p-2.5 rounded-xl bg-zinc-900 border border-white/10 text-zinc-300 hover:text-white transition-colors"
+                aria-label="Toggle navigation menu"
+              >
+                {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+            </div>
+
+          </div>
+        </header>
+      )}
 
       {/* MOBILE DRAWER MODAL MENU (< md) */}
       <AnimatePresence>
-        {isMobileMenuOpen && (
+        {isMobileMenuOpen && transactions.length > 0 && (
           <div className="fixed inset-0 z-50 md:hidden flex flex-col">
             <motion.div
               initial={{ opacity: 0 }}
@@ -484,9 +720,9 @@ export default function Home() {
               <div className="flex items-center justify-between pb-3 border-b border-white/10">
                 <div className="flex items-center gap-2.5">
                   <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-900 border border-white/15 text-indigo-400">
-                    <CalendarIcon className="w-4 h-4" />
+                    <CalendarIcon className="w-4.5 h-4.5" />
                   </div>
-                  <span className="text-base font-bold text-white">Forecast Engine Menu</span>
+                  <span className="text-base font-bold text-white">Financial OS Menu</span>
                 </div>
                 <button
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -498,7 +734,7 @@ export default function Home() {
 
               {/* Navigation Tabs List */}
               <div className="flex flex-col gap-2">
-                <span className="text-xs font-mono font-bold tracking-widest text-zinc-300 uppercase px-1">
+                <span className="text-xs font-mono font-bold tracking-widest text-zinc-500 uppercase px-1">
                   Navigation
                 </span>
                 <button
@@ -510,8 +746,21 @@ export default function Home() {
                     activeTab === "dashboard" ? "bg-indigo-600/25 border border-indigo-500/40 text-white font-bold" : "bg-zinc-900/60 text-zinc-200 hover:text-white"
                   }`}
                 >
-                  <CalendarIcon className="w-4 h-4 text-indigo-400" />
+                  <CalendarIcon className="w-4.5 h-4.5 text-indigo-400" />
                   <span className="text-sm font-medium">Dashboard</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab("accounts");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`flex items-center gap-3 p-3.5 rounded-xl text-left transition-all ${
+                    activeTab === "accounts" ? "bg-indigo-600/25 border border-indigo-500/40 text-white font-bold" : "bg-zinc-900/60 text-zinc-200 hover:text-white"
+                  }`}
+                >
+                  <Wallet className="w-4.5 h-4.5 text-indigo-400" />
+                  <span className="text-sm font-medium">Accounts ({accounts.length})</span>
                 </button>
 
                 <button
@@ -523,8 +772,8 @@ export default function Home() {
                     activeTab === "income" ? "bg-emerald-600/25 border border-emerald-500/40 text-white font-bold" : "bg-zinc-900/60 text-zinc-200 hover:text-white"
                   }`}
                 >
-                  <Coins className="w-4 h-4 text-emerald-400" />
-                  <span className="text-sm font-medium">Income Registry ({categorizedTransactions.income.length})</span>
+                  <Coins className="w-4.5 h-4.5 text-emerald-400" />
+                  <span className="text-sm font-medium">Income ({categorizedTransactions.income.length})</span>
                 </button>
 
                 <button
@@ -537,7 +786,7 @@ export default function Home() {
                     activeTab === "expenses" ? "bg-rose-600/25 border border-rose-500/40 text-white font-bold" : "bg-zinc-900/60 text-zinc-200 hover:text-white"
                   }`}
                 >
-                  <TrendingDown className="w-4 h-4 text-rose-400" />
+                  <TrendingDown className="w-4.5 h-4.5 text-rose-400" />
                   <span className="text-sm font-medium">Expenses & Savings ({categorizedTransactions.fixedExpenses.length + categorizedTransactions.subscriptions.length + categorizedTransactions.savings.length})</span>
                 </button>
 
@@ -550,19 +799,22 @@ export default function Home() {
                     activeTab === "liabilities" ? "bg-amber-600/25 border border-amber-500/40 text-white font-bold" : "bg-zinc-900/60 text-zinc-200 hover:text-white"
                   }`}
                 >
-                  <Clock className="w-4 h-4 text-amber-400" />
+                  <Clock className="w-4.5 h-4.5 text-amber-400" />
                   <span className="text-sm font-medium">Liabilities ({categorizedTransactions.liabilities.length})</span>
                 </button>
               </div>
 
               {/* Data Tools */}
               <div className="pt-3 border-t border-white/10 flex flex-col gap-2">
-                <span className="text-xs font-mono font-bold tracking-widest text-zinc-300 uppercase px-1">
+                <span className="text-xs font-mono font-bold tracking-widest text-zinc-500 uppercase px-1">
                   Actions & Data
                 </span>
                 <div className="grid grid-cols-2 gap-2">
                   <button
-                    onClick={handleExportData}
+                    onClick={() => {
+                      handleExportData();
+                      setIsMobileMenuOpen(false);
+                    }}
                     className="flex items-center justify-center gap-2 p-3 rounded-xl bg-zinc-900 border border-white/10 text-zinc-200 text-xs font-mono font-semibold"
                   >
                     <Download className="w-4 h-4 text-indigo-400" />
@@ -571,20 +823,26 @@ export default function Home() {
                   <label className="flex items-center justify-center gap-2 p-3 rounded-xl bg-zinc-900 border border-white/10 text-zinc-200 text-xs font-mono font-semibold cursor-pointer">
                     <Upload className="w-4 h-4 text-indigo-400" />
                     <span>Import</span>
-                    <input type="file" accept=".json" onChange={handleImportData} className="hidden" />
+                    <input type="file" accept=".json" onChange={(e) => { handleImportData(e); setIsMobileMenuOpen(false); }} className="hidden" />
                   </label>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   <button
-                    onClick={handleClearData}
+                    onClick={() => {
+                      handleClearData();
+                      setIsMobileMenuOpen(false);
+                    }}
                     className="flex items-center justify-center gap-2 p-3 rounded-xl bg-rose-950/30 border border-rose-500/30 text-rose-300 text-xs font-mono font-semibold"
                   >
                     <Trash2 className="w-4 h-4" />
                     <span>Clear All</span>
                   </button>
                   <button
-                    onClick={handleLoadSampleData}
+                    onClick={() => {
+                      handleLoadSampleData();
+                      setIsMobileMenuOpen(false);
+                    }}
                     className="flex items-center justify-center gap-2 p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/30 text-indigo-300 text-xs font-mono font-semibold"
                   >
                     <Sparkles className="w-4 h-4" />
@@ -597,313 +855,1142 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* DESKTOP SIDEBAR NAVIGATION (hidden on mobile, visible on >= md) */}
-      <aside className="hidden md:flex w-72 flex-col bg-zinc-950/40 border-r border-white/5 shrink-0">
-        <div className="p-6 border-b border-white/5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="relative flex items-center justify-center w-10 h-10 rounded-2xl bg-zinc-900 border border-white/10 shadow-sm">
-              <CalendarIcon className="w-5 h-5 text-indigo-400" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold tracking-tight text-zinc-100 leading-none">
-                ForecastPWA
-              </h1>
-              <span className="text-[10px] tracking-widest text-zinc-500 font-mono block mt-1 uppercase">
-                TRANSACTION ENGINE
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <nav className="p-4 flex-1 flex flex-col gap-1.5 overflow-y-auto scrollbar-none">
-          <span className="px-3 py-1.5 text-[10px] font-semibold font-mono tracking-widest text-zinc-500 uppercase">
-            Menu
-          </span>
-          
-          <button
-            id="nav-tab-dashboard"
-            onClick={() => setActiveTab("dashboard")}
-            className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all text-left ${
-              activeTab === "dashboard"
-                ? "bg-zinc-900 text-zinc-100 border border-white/10 shadow-lg"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30 border border-transparent"
-            }`}
-          >
-            <CalendarIcon className="w-4.5 h-4.5 text-indigo-400" />
-            <div>
-              <div className="font-semibold text-xs tracking-wide">Dashboard</div>
-              <div className="text-[9px] text-zinc-500 font-mono uppercase mt-0.5">Timeframe & Calendar</div>
-            </div>
-          </button>
-
-          <button
-            id="nav-tab-income"
-            onClick={() => setActiveTab("income")}
-            className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all text-left ${
-              activeTab === "income"
-                ? "bg-zinc-900 text-zinc-100 border border-white/10 shadow-lg"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30 border border-transparent"
-            }`}
-          >
-            <Coins className="w-4.5 h-4.5 text-emerald-400" />
-            <div>
-              <div className="font-semibold text-xs tracking-wide">Income</div>
-              <div className="text-[9px] text-zinc-500 font-mono uppercase mt-0.5">Recurring Inflows ({categorizedTransactions.income.length})</div>
-            </div>
-          </button>
-
-          <button
-            id="nav-tab-expenses"
-            onClick={() => {
-              setActiveTab("expenses");
-              setExpenseSubTab("all");
-            }}
-            className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all text-left ${
-              activeTab === "expenses"
-                ? "bg-zinc-900 text-zinc-100 border border-white/10 shadow-lg"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30 border border-transparent"
-            }`}
-          >
-            <TrendingDown className="w-4.5 h-4.5 text-rose-400" />
-            <div>
-              <div className="font-semibold text-xs tracking-wide">Expenses</div>
-              <div className="text-[9px] text-zinc-500 font-mono uppercase mt-0.5">Bills, Subs & Savings</div>
-            </div>
-          </button>
-
-          <button
-            id="nav-tab-liabilities"
-            onClick={() => setActiveTab("liabilities")}
-            className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all text-left ${
-              activeTab === "liabilities"
-                ? "bg-zinc-900 text-zinc-100 border border-white/10 shadow-lg"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30 border border-transparent"
-            }`}
-          >
-            <Clock className="w-4.5 h-4.5 text-amber-400" />
-            <div>
-              <div className="font-semibold text-xs tracking-wide">Liabilities</div>
-              <div className="text-[9px] text-zinc-500 font-mono uppercase mt-0.5">Obligations & Leases</div>
-            </div>
-          </button>
-        </nav>
-
-        <div className="p-4 border-t border-white/5 bg-black/10 flex flex-col gap-2">
-          <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500 px-2">
-            <span>REGISTRY COUNT</span>
-            <span className="text-zinc-300 font-bold">{transactions.length} items</span>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-2 mt-1">
-            <button
-              onClick={handleExportData}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900/40 hover:bg-zinc-900/60 border border-white/5 text-zinc-300 hover:text-zinc-100 text-[11px] font-mono transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export</span>
-            </button>
-            <label
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900/40 hover:bg-zinc-900/60 border border-white/5 text-zinc-300 hover:text-zinc-100 text-[11px] font-mono transition-colors cursor-pointer"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span>Import</span>
-              <input type="file" accept=".json" onChange={handleImportData} className="hidden" />
-            </label>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 mt-1">
-            <button
-              onClick={handleClearData}
-              className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 text-rose-400 text-[10px] font-mono transition-all"
-            >
-              <Trash2 className="w-3 h-3" />
-              <span>Clear Data</span>
-            </button>
-            <button
-              onClick={handleLoadSampleData}
-              className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-950/20 hover:bg-indigo-950/40 border border-indigo-500/20 text-indigo-400 text-[10px] font-mono transition-all"
-            >
-              <Sparkles className="w-3 h-3" />
-              <span>Load Sample</span>
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* MOBILE STICKY BOTTOM NAVBAR (< md) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-md border-t border-white/10 px-2 py-1.5 flex justify-around items-center">
-        <button
-          onClick={() => setActiveTab("dashboard")}
-          className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${
-            activeTab === "dashboard" ? "text-indigo-400 font-bold" : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          <CalendarIcon className="w-5 h-5" />
-          <span className="text-[10px] font-mono">Dashboard</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("income")}
-          className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${
-            activeTab === "income" ? "text-emerald-400 font-bold" : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          <Coins className="w-5 h-5" />
-          <span className="text-[10px] font-mono">Income</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveTab("expenses");
-            setExpenseSubTab("all");
-          }}
-          className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${
-            activeTab === "expenses" ? "text-rose-400 font-bold" : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          <TrendingDown className="w-5 h-5" />
-          <span className="text-[10px] font-mono">Expenses</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("liabilities")}
-          className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${
-            activeTab === "liabilities" ? "text-amber-400 font-bold" : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          <Clock className="w-5 h-5" />
-          <span className="text-[10px] font-mono">Liabilities</span>
-        </button>
-      </nav>
-
       {/* MAIN CONTENT REGION */}
-      <main className="flex-1 flex flex-col overflow-y-auto scrollbar-thin relative bg-[#070709] p-4 sm:p-6 md:p-8 pb-24 md:pb-8">
+      <main className={`flex-1 flex flex-col overflow-y-auto scrollbar-thin relative bg-[#070709] ${transactions.length === 0 ? "p-4 sm:p-6 md:p-8 items-center justify-center min-h-screen" : "p-4 sm:p-6 md:p-8 pb-24 md:pb-8"}`}>
         
-        <AnimatePresence mode="wait">
-          
-          {/* TAB 1: DASHBOARD VIEW - KPIs and Calendar */}
-          {activeTab === "dashboard" && (
-            <motion.div
-              key="dashboard"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.25 }}
-              className="flex flex-col gap-6 max-w-7xl w-full mx-auto"
-            >
-              
-              {/* Dynamic Header & Starting Parameters Console Panel */}
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-zinc-900/30 p-5 border border-white/5 rounded-3xl">
-                <div>
-                  <h2 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
-                    Dashboard
-                  </h2>
-                  <p className="text-xs text-zinc-500">Center your cash timeline projection by picking starting metrics.</p>
+        {transactions.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center w-full max-w-5xl mx-auto py-8">
+            {/* Header / Brand for onboarding */}
+            <div className="w-full mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-10 h-10 rounded-2xl bg-zinc-950 border border-white/10 shadow-sm text-indigo-400 shrink-0">
+                  <CalendarIcon className="w-5 h-5" />
                 </div>
-
-                {/* Inline Starting Parameter Inputs - Kept completely clean of sidebar */}
-                <div className="flex flex-wrap items-center gap-5">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-semibold font-mono tracking-wider text-zinc-300 uppercase">Starting Balance</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-semibold text-zinc-300">$</span>
-                      <input 
-                        type="number"
-                        value={initialBalance}
-                        onChange={(e) => updateInitialBalance(Math.max(0, parseFloat(e.target.value) || 0))}
-                        className="w-28 bg-transparent border-b border-white/20 hover:border-white/40 focus:border-indigo-400 font-mono text-sm text-white focus:outline-none pb-0.5 transition-colors font-medium"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="w-px h-8 bg-white/10 hidden sm:block"></div>
-
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-semibold font-mono tracking-wider text-zinc-300 uppercase">Starting Date</span>
-                    <input 
-                      type="date"
-                      value={launchDateStr}
-                      onChange={(e) => updateLaunchDate(e.target.value)}
-                      className="bg-transparent border-b border-white/20 hover:border-white/40 focus:border-indigo-400 font-mono text-sm text-white focus:outline-none pb-0.5 cursor-pointer transition-colors font-medium"
-                    />
-                  </div>
+                <div>
+                  <h1 className="text-base font-bold text-white tracking-tight leading-none">Financial OS</h1>
+                  <span className="text-[10px] font-mono tracking-widest text-zinc-500 uppercase mt-0.5 block font-medium">Cash Engine</span>
                 </div>
               </div>
 
-              {/* EMPTY STATE HERO - GUIDANCE TO ADD REAL DATA */}
-              {transactions.length === 0 && (
-                <div className="bg-gradient-to-br from-indigo-950/40 via-zinc-900/50 to-zinc-950 border border-indigo-500/30 rounded-3xl p-6 sm:p-8 text-center flex flex-col items-center justify-center my-1 shadow-xl">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mb-3">
-                    <Sparkles className="w-6 h-6" />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleLoadSampleData}
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-950/20 hover:bg-indigo-950/40 border border-indigo-500/20 text-indigo-400 text-xs font-semibold font-mono transition-all"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Load Sample</span>
+                </button>
+                
+                <label className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-white/5 text-zinc-300 hover:text-white text-xs font-semibold font-mono transition-colors cursor-pointer">
+                  <Upload className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Import</span>
+                  <input type="file" accept=".json" onChange={handleImportData} className="hidden" />
+                </label>
+              </div>
+            </div>
+
+            {/* The onboarding setup wizard container */}
+            <div className="w-full bg-zinc-950 border border-white/10 rounded-3xl p-6 md:p-8 flex flex-col min-h-[500px] shadow-2xl relative overflow-hidden">
+              
+              {/* Progress Header */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-white/5">
+                <div>
+                  <div className="flex items-center gap-2 text-indigo-400 font-mono text-xs font-semibold uppercase tracking-wider">
+                    <Sparkles className="w-4 h-4 animate-pulse" />
+                    <span>Interactive Onboarding Setup</span>
                   </div>
-                  <h3 className="text-lg sm:text-xl font-bold text-white">
-                    Build Your Real Financial Forecast
+                  <h3 className="text-xl font-bold text-white mt-1">
+                    Configure Your Financial OS
                   </h3>
-                  <p className="text-xs sm:text-sm text-zinc-300 max-w-md mt-1.5 leading-relaxed">
-                    Dummy data removed. Start by registering your real salary, rent, subscriptions, or savings targets to see your exact cash balance projected over time.
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    {"Let's establish your forecast parameters step-by-step."}
                   </p>
+                </div>
 
-                  <div className="flex flex-wrap items-center justify-center gap-2.5 mt-5 w-full max-w-lg">
-                    <button
-                      onClick={() => {
-                        setFormCategory("income");
-                        setFormStartDate(launchDateStr);
-                        setIsAddingTransaction(true);
-                      }}
-                      className="flex-1 min-w-[130px] px-3.5 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
-                    >
-                      <Plus className="w-4 h-4 text-emerald-400" />
-                      <span>+ Income</span>
-                    </button>
+                {/* Progress Indicator */}
+                <div className="flex items-center gap-2 bg-zinc-900/40 border border-white/5 px-4 py-2 rounded-2xl">
+                  {[
+                    { step: 0, label: "Start" },
+                    { step: 1, label: "Income" },
+                    { step: 2, label: "Expenses" },
+                    { step: 3, label: "Liabilities" },
+                    { step: 4, label: "Summary" }
+                  ].map((item, idx) => (
+                    <React.Fragment key={item.step}>
+                      <button
+                        onClick={() => {
+                          if (item.step <= Math.max(wizActiveStep, 1)) {
+                            setWizActiveStep(item.step);
+                            setWizError(null);
+                          }
+                        }}
+                        className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold font-mono transition-all ${
+                          wizActiveStep === item.step
+                            ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"
+                            : wizActiveStep > item.step
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                            : "bg-zinc-900 text-zinc-500 border border-white/5"
+                        }`}
+                      >
+                        {item.step === 4 ? "✓" : item.step}
+                      </button>
+                      {idx < 4 && (
+                        <div className={`w-3 sm:w-6 h-[2px] ${wizActiveStep > item.step ? "bg-emerald-500/40" : "bg-zinc-800"}`} />
+                      )}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
 
-                    <button
-                      onClick={() => {
-                        setFormCategory("fixed-expense");
-                        setFormStartDate(launchDateStr);
-                        setIsAddingTransaction(true);
-                      }}
-                      className="flex-1 min-w-[130px] px-3.5 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
-                    >
-                      <Plus className="w-4 h-4 text-rose-400" />
-                      <span>+ Fixed Expense</span>
-                    </button>
+              {/* Wizard Step Content Container */}
+              <div className="flex-1 py-6">
+                {wizError && (
+                  <div className="mb-4 bg-rose-500/10 border border-rose-500/20 px-4 py-2.5 rounded-2xl text-rose-300 text-xs flex items-center justify-between">
+                    <span>{wizError}</span>
+                    <button onClick={() => setWizError(null)} className="font-bold text-zinc-400 hover:text-white ml-2">×</button>
+                  </div>
+                )}
 
-                    <button
-                      onClick={() => {
-                        setFormCategory("subscription");
-                        setFormStartDate(launchDateStr);
-                        setIsAddingTransaction(true);
-                      }}
-                      className="flex-1 min-w-[130px] px-3.5 py-2.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
-                    >
-                      <Plus className="w-4 h-4 text-indigo-400" />
-                      <span>+ Subscription</span>
-                    </button>
 
-                    <button
-                      onClick={() => {
-                        setFormCategory("liability");
-                        setFormStartDate(launchDateStr);
-                        setIsAddingTransaction(true);
-                      }}
-                      className="flex-1 min-w-[130px] px-3.5 py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
-                    >
-                      <Plus className="w-4 h-4 text-amber-400" />
-                      <span>+ Liability</span>
-                    </button>
+
+                    {/* STEP 0: ACCOUNTS SETUP */}
+                    {wizActiveStep === 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="grid grid-cols-1 lg:grid-cols-12 gap-6"
+                      >
+                        {/* Add Account Inline Form */}
+                        <div className="lg:col-span-5 bg-zinc-950/40 border border-white/5 p-5 rounded-2xl flex flex-col gap-4">
+                          <div>
+                            <h4 className="text-sm font-bold text-white">1. Add Your Accounts</h4>
+                            <p className="text-[11px] text-zinc-400">Establish your checking, savings, or credit cards.</p>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Account Name</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Chase Checking, High-Yield Savings"
+                                value={wizAccName}
+                                onChange={(e) => { setWizAccName(e.target.value); setWizError(null); }}
+                                className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Account Type</label>
+                                <select
+                                  value={wizAccType}
+                                  onChange={(e) => {
+                                    setWizAccType(e.target.value as any);
+                                    setWizError(null);
+                                  }}
+                                  className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
+                                >
+                                  <option value="checking">Checking</option>
+                                  <option value="savings">Savings</option>
+                                  <option value="credit-card">Credit Card</option>
+                                  <option value="other">Other</option>
+                                </select>
+                              </div>
+
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
+                                  {wizAccType === "credit-card" ? "Outstanding Balance ($)" : "Starting Balance ($)"}
+                                </label>
+                                <input
+                                  type="number"
+                                  placeholder="0.00"
+                                  value={wizAccBalance}
+                                  onChange={(e) => { setWizAccBalance(e.target.value); setWizError(null); }}
+                                  className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono font-medium"
+                                />
+                              </div>
+                            </div>
+
+                            {wizAccType === "other" && (
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-bold font-mono tracking-wider text-rose-300 uppercase block">Specify Account Type</label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. Brokerage, Cash Envelope"
+                                  value={wizAccCustomType}
+                                  onChange={(e) => { setWizAccCustomType(e.target.value); setWizError(null); }}
+                                  className="bg-zinc-900 border border-rose-500/30 focus:border-rose-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none font-medium"
+                                />
+                                <span className="text-[9px] text-zinc-500 italic block">Please enter an account type to avoid ambiguity.</span>
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!wizAccName.trim()) { setWizError("Please enter an account name."); return; }
+                                if (wizAccType === "other" && !wizAccCustomType.trim()) {
+                                  setWizError("Account type cannot be ambiguous. Please specify the custom account type.");
+                                  return;
+                                }
+                                const bal = parseFloat(wizAccBalance) || 0;
+                                const accId = "acc_" + String(new Date().getTime());
+                                const newAccount: Account = {
+                                  id: accId,
+                                  name: wizAccName.trim(),
+                                  type: wizAccType,
+                                  customType: wizAccType === "other" ? wizAccCustomType.trim() : undefined,
+                                  balance: Math.max(0, bal),
+                                };
+
+                                // Save account
+                                const updatedAccounts = [...wizAccounts, newAccount];
+                                setWizAccounts(updatedAccounts);
+
+                                // If credit card, automatically pre-add liability with $0 so they configure minimum payments in Step 3
+                                if (wizAccType === "credit-card") {
+                                  const matchingLiability: RecurringTransaction = {
+                                    id: "l_" + String(new Date().getTime()),
+                                    title: `${wizAccName.trim()} Minimum Payment`,
+                                    amount: 0, // Prompt for missing amount
+                                    startDate: launchDateStr,
+                                    frequency: "monthly",
+                                    category: "liability",
+                                    targetAccountId: accId,
+                                  };
+                                  setWizTransactions(prev => [...prev, matchingLiability]);
+                                }
+
+                                // Reset form inputs
+                                setWizAccName("");
+                                setWizAccCustomType("");
+                                setWizAccBalance("");
+                                setWizError(null);
+                              }}
+                              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-md mt-2"
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span>Add Account</span>
+                            </button>
+                          </div>
+
+                          <div className="border-t border-white/5 pt-3">
+                            <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase block mb-1">Starting Date</label>
+                            <input
+                              type="date"
+                              value={launchDateStr}
+                              onChange={(e) => updateLaunchDate(e.target.value)}
+                              className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono w-full cursor-pointer"
+                            />
+                            <span className="text-[9px] text-zinc-500 block mt-1">Forecast timeline projections begin here.</span>
+                          </div>
+                        </div>
+
+                        {/* List Area */}
+                        <div className="lg:col-span-7 flex flex-col justify-between">
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h5 className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-400">Registered Accounts</h5>
+                              <span className="text-xs font-bold text-indigo-400">
+                                Net Assets: ${wizAccounts.reduce((sum, a) => a.type === "credit-card" ? sum - a.balance : sum + a.balance, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+
+                            <div className="bg-zinc-950/20 border border-white/5 rounded-2xl overflow-hidden min-h-[180px] flex flex-col justify-center">
+                              {wizAccounts.length === 0 ? (
+                                <div className="text-center py-8 text-zinc-500 text-xs italic space-y-1.5">
+                                  <p>No accounts registered yet.</p>
+                                  <p className="text-[10px] text-zinc-600">Add checking or savings accounts to establish starting funds.</p>
+                                </div>
+                              ) : (
+                                <div className="divide-y divide-white/5 max-h-[220px] overflow-y-auto scrollbar-thin">
+                                  {wizAccounts.map(acc => (
+                                    <div key={acc.id} className="flex items-center justify-between p-3 hover:bg-zinc-900/30 transition-colors">
+                                      <div>
+                                        <p className="text-xs font-semibold text-white">{acc.name}</p>
+                                        <p className="text-[10px] text-zinc-400 capitalize font-mono">
+                                          {acc.type === "other" ? acc.customType : acc.type}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <span className={`text-xs font-mono font-bold ${acc.type === "credit-card" ? "text-amber-400" : "text-emerald-400"}`}>
+                                          {acc.type === "credit-card" ? "-" : ""}${acc.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            // Delete account & matching auto-liabilities
+                                            setWizAccounts(wizAccounts.filter(a => a.id !== acc.id));
+                                            setWizTransactions(wizTransactions.filter(t => t.targetAccountId !== acc.id));
+                                          }}
+                                          className="text-[10px] text-rose-400 hover:text-rose-300 font-bold px-2 py-1"
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="pt-6 flex items-center justify-between gap-4">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTransactions(SAMPLE_TRANSACTIONS);
+                                setAccounts(SAMPLE_ACCOUNTS);
+                                saveToStorage(SAMPLE_TRANSACTIONS, launchDateStr, SAMPLE_ACCOUNTS);
+                              }}
+                              className="text-xs font-mono font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
+                            >
+                              Skip & Load Sample Data
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                // Validate at least one checking or cash asset account exists
+                                const hasCashAcc = wizAccounts.some(a => a.type !== "credit-card" && a.type !== "other");
+                                if (!hasCashAcc) {
+                                  setWizError("Please register at least one Checking or Savings asset account to begin.");
+                                  return;
+                                }
+                                setWizError(null);
+                                setWizActiveStep(1);
+                              }}
+                              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white flex items-center gap-1.5 shadow-lg shadow-indigo-600/15 transition-all active:scale-95"
+                            >
+                              <span>Next: Set Up Income</span>
+                              <ArrowRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* STEP 1: INCOME SETUP */}
+                    {wizActiveStep === 1 && (
+                      <motion.div
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="grid grid-cols-1 lg:grid-cols-12 gap-6"
+                      >
+                        {/* Inline Form */}
+                        <div className="lg:col-span-5 bg-zinc-950/40 border border-white/5 p-5 rounded-2xl flex flex-col gap-4">
+                          <div>
+                            <h4 className="text-sm font-bold text-white">Add Income</h4>
+                            <p className="text-[11px] text-zinc-400">Register paycheck, wages, or periodic deposits.</p>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Income Name</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Work Paycheck"
+                                value={wizTitle}
+                                onChange={(e) => { setWizTitle(e.target.value); setWizError(null); }}
+                                className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Amount ($)</label>
+                                <input
+                                  type="number"
+                                  placeholder="0.00"
+                                  value={wizAmount}
+                                  onChange={(e) => { setWizAmount(e.target.value); setWizError(null); }}
+                                  className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono font-medium"
+                                />
+                              </div>
+
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Frequency</label>
+                                <select
+                                  value={wizFrequency}
+                                  onChange={(e) => setWizFrequency(e.target.value)}
+                                  className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
+                                >
+                                  <option value="weekly">Weekly</option>
+                                  <option value="biweekly">Bi-Weekly</option>
+                                  <option value="semimonthly">Semi-Monthly (1st & 15th)</option>
+                                  <option value="monthly">Monthly</option>
+                                  <option value="quarterly">Quarterly</option>
+                                  <option value="yearly">Yearly</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            {wizFrequency === "semimonthly" && (
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Semi-Monthly Pay Days</label>
+                                <input
+                                  type="text"
+                                  value={wizSemiDays}
+                                  onChange={(e) => setWizSemiDays(e.target.value)}
+                                  placeholder="e.g. 1,15"
+                                  className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                                />
+                              </div>
+                            )}
+
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">First Pay Date</label>
+                              <input
+                                type="date"
+                                value={wizStartDate || launchDateStr}
+                                onChange={(e) => setWizStartDate(e.target.value)}
+                                className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono cursor-pointer"
+                              />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Deposit to Account</label>
+                              <select
+                                value={wizAccountId}
+                                onChange={(e) => setWizAccountId(e.target.value)}
+                                className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
+                              >
+                                <option value="">Select Asset Account (Default checking)</option>
+                                {wizAccounts.filter(a => a.type !== "credit-card").map(acc => (
+                                  <option key={acc.id} value={acc.id}>{acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!wizTitle.trim()) { setWizError("Please enter an income name."); return; }
+                                const amt = parseFloat(wizAmount);
+                                if (isNaN(amt) || amt <= 0) { setWizError("Please enter a valid amount greater than 0."); return; }
+                                const payload: RecurringTransaction = {
+                                  id: generateId(),
+                                  title: wizTitle.trim(),
+                                  amount: amt,
+                                  startDate: wizStartDate || launchDateStr,
+                                  frequency: wizFrequency as any,
+                                  category: "income",
+                                  accountId: wizAccountId || undefined,
+                                  semiMonthlyDays: wizFrequency === "semimonthly" ? wizSemiDays.split(",").map(Number).filter(n => !isNaN(n)) : undefined
+                                };
+                                setWizTransactions([...wizTransactions, payload]);
+                                setWizTitle("");
+                                setWizAmount("");
+                                setWizFrequency("monthly");
+                                setWizSemiDays("1,15");
+                                setWizAccountId("");
+                                setWizError(null);
+                              }}
+                              className="w-full py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-md mt-2"
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span>Add Income</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* List Area */}
+                        <div className="lg:col-span-7 flex flex-col justify-between">
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h5 className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-400">Your Income Summary</h5>
+                              <span className="text-xs font-bold text-emerald-400">
+                                Total: ${wizTransactions.filter(t => t.category === "income").reduce((acc, c) => acc + c.amount, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} / month
+                              </span>
+                            </div>
+
+                            <div className="bg-zinc-950/20 border border-white/5 rounded-2xl overflow-hidden min-h-[160px] flex flex-col justify-center">
+                              {wizTransactions.filter(t => t.category === "income").length === 0 ? (
+                                <div className="text-center py-8 text-zinc-500 text-xs italic">
+                                  No income added yet. Please add at least one paycheck.
+                                </div>
+                              ) : (
+                                <div className="divide-y divide-white/5 max-h-[220px] overflow-y-auto scrollbar-thin">
+                                  {wizTransactions.filter(t => t.category === "income").map(t => (
+                                    <div key={t.id} className="flex items-center justify-between p-3.5 hover:bg-zinc-900/30 transition-colors">
+                                      <div>
+                                        <p className="text-xs font-semibold text-white">{t.title}</p>
+                                        <p className="text-[10px] text-zinc-400 capitalize font-mono mt-0.5">
+                                          {t.frequency === "biweekly" ? "Bi-Weekly" : t.frequency} &bull; Next: {t.startDate}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-xs font-mono font-bold text-emerald-400">+${t.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setWizTransactions(wizTransactions.filter(tx => tx.id !== t.id))}
+                                          className="p-1.5 text-zinc-500 hover:text-rose-400 rounded-lg hover:bg-zinc-800 transition-colors"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-6 border-t border-white/5 mt-6">
+                            <button
+                              type="button"
+                              onClick={() => setWizActiveStep(0)}
+                              className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-white/10 text-zinc-300 font-semibold text-xs flex items-center gap-1.5 transition-all"
+                            >
+                              <ArrowLeft className="w-4 h-4" />
+                              <span>Back</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (wizTransactions.filter(t => t.category === "income").length === 0) {
+                                  setWizError("We highly recommend adding at least one regular income payload to build an available spend margin.");
+                                }
+                                setWizActiveStep(2);
+                                setWizError(null);
+                              }}
+                              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white flex items-center gap-1.5 shadow-lg shadow-indigo-600/15 transition-all"
+                            >
+                              <span>Next: Expenses</span>
+                              <ArrowRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* STEP 2: EXPENSES SETUP (FIXED & SUBSCRIPTIONS) */}
+                    {wizActiveStep === 2 && (
+                      <motion.div
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="grid grid-cols-1 lg:grid-cols-12 gap-6"
+                      >
+                        {/* Inline Form */}
+                        <div className="lg:col-span-5 bg-zinc-950/40 border border-white/5 p-5 rounded-2xl flex flex-col gap-4">
+                          <div>
+                            <h4 className="text-sm font-bold text-white font-sans">Add Recurring Expense</h4>
+                            <p className="text-[11px] text-zinc-400">Enter housing, subscriptions, or fixed outgoings.</p>
+                          </div>
+
+                          <div className="grid grid-cols-2 p-1 bg-zinc-950 rounded-xl border border-white/5">
+                            <button
+                              type="button"
+                              onClick={() => setWizExpenseType("fixed-expense")}
+                              className={`py-1.5 rounded-lg text-[10px] font-bold uppercase font-mono transition-all ${
+                                wizExpenseType === "fixed-expense"
+                                  ? "bg-zinc-800 text-white shadow-sm"
+                                  : "text-zinc-400 hover:text-white"
+                              }`}
+                            >
+                              Fixed Expense
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setWizExpenseType("subscription")}
+                              className={`py-1.5 rounded-lg text-[10px] font-bold uppercase font-mono transition-all ${
+                                wizExpenseType === "subscription"
+                                  ? "bg-zinc-800 text-white shadow-sm"
+                                  : "text-zinc-400 hover:text-white"
+                              }`}
+                            >
+                              Subscription
+                            </button>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Expense Name</label>
+                              <input
+                                type="text"
+                                placeholder={wizExpenseType === "fixed-expense" ? "e.g. Rent, Car Insurance" : "e.g. Netflix, Spotify, Gym"}
+                                value={wizTitle}
+                                onChange={(e) => { setWizTitle(e.target.value); setWizError(null); }}
+                                className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Amount ($)</label>
+                                <input
+                                  type="number"
+                                  placeholder="0.00"
+                                  value={wizAmount}
+                                  onChange={(e) => { setWizAmount(e.target.value); setWizError(null); }}
+                                  className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono font-medium"
+                                />
+                              </div>
+
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Frequency</label>
+                                <select
+                                  value={wizFrequency}
+                                  onChange={(e) => setWizFrequency(e.target.value)}
+                                  className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
+                                >
+                                  <option value="weekly">Weekly</option>
+                                  <option value="biweekly">Bi-Weekly</option>
+                                  <option value="monthly">Monthly</option>
+                                  <option value="quarterly">Quarterly</option>
+                                  <option value="yearly">Yearly</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Next Due Date</label>
+                              <input
+                                type="date"
+                                value={wizStartDate || launchDateStr}
+                                onChange={(e) => setWizStartDate(e.target.value)}
+                                className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono cursor-pointer"
+                              />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Paid From Account</label>
+                              <select
+                                value={wizFundingAccountId}
+                                onChange={(e) => setWizFundingAccountId(e.target.value)}
+                                className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
+                              >
+                                <option value="">Select Account (Default checking)</option>
+                                {wizAccounts.map(acc => (
+                                  <option key={acc.id} value={acc.id}>{acc.name} ({acc.type === "credit-card" ? "Credit Card" : (acc.type === "other" ? acc.customType || "Other" : acc.type)})</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!wizTitle.trim()) { setWizError("Please enter an expense name."); return; }
+                                const amt = parseFloat(wizAmount);
+                                if (isNaN(amt) || amt <= 0) { setWizError("Please enter a valid amount greater than 0."); return; }
+                                const payload: RecurringTransaction = {
+                                  id: generateId(),
+                                  title: wizTitle.trim(),
+                                  amount: amt,
+                                  startDate: wizStartDate || launchDateStr,
+                                  frequency: wizFrequency as any,
+                                  category: wizExpenseType,
+                                  fundingAccountId: wizFundingAccountId || undefined,
+                                };
+                                setWizTransactions([...wizTransactions, payload]);
+                                setWizTitle("");
+                                setWizAmount("");
+                                setWizFrequency("monthly");
+                                setWizFundingAccountId("");
+                                setWizError(null);
+                              }}
+                              className="w-full py-2 rounded-xl bg-rose-500 hover:bg-rose-450 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-md mt-2"
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span>Add {wizExpenseType === "fixed-expense" ? "Fixed Expense" : "Subscription"}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* List Area */}
+                        <div className="lg:col-span-7 flex flex-col justify-between">
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h5 className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-400">Registered Expenses</h5>
+                              <span className="text-xs font-bold text-rose-400">
+                                Total: ${wizTransactions.filter(t => t.category === "fixed-expense" || t.category === "subscription").reduce((acc, c) => acc + c.amount, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} / month
+                              </span>
+                            </div>
+
+                            <div className="bg-zinc-950/20 border border-white/5 rounded-2xl overflow-hidden min-h-[160px] flex flex-col justify-center">
+                              {wizTransactions.filter(t => t.category === "fixed-expense" || t.category === "subscription").length === 0 ? (
+                                <div className="text-center py-8 text-zinc-500 text-xs italic">
+                                  No expenses added yet. Please add any fixed costs or regular subscriptions.
+                                </div>
+                              ) : (
+                                <div className="divide-y divide-white/5 max-h-[220px] overflow-y-auto scrollbar-thin">
+                                  {wizTransactions.filter(t => t.category === "fixed-expense" || t.category === "subscription").map(t => (
+                                    <div key={t.id} className="flex items-center justify-between p-3.5 hover:bg-zinc-900/30 transition-colors">
+                                      <div>
+                                        <div className="flex items-center gap-1.5">
+                                          <p className="text-xs font-semibold text-white">{t.title}</p>
+                                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase font-mono tracking-wider ${
+                                            t.category === "subscription" ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/15" : "bg-zinc-800 text-zinc-400"
+                                          }`}>
+                                            {t.category === "subscription" ? "Sub" : "Fixed"}
+                                          </span>
+                                        </div>
+                                        <p className="text-[10px] text-zinc-400 capitalize font-mono mt-1">
+                                          {t.frequency} &bull; Next due: {t.startDate}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-xs font-mono font-bold text-rose-400">-${t.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setWizTransactions(wizTransactions.filter(tx => tx.id !== t.id))}
+                                          className="p-1.5 text-zinc-500 hover:text-rose-400 rounded-lg hover:bg-zinc-800 transition-colors"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-6 border-t border-white/5 mt-6">
+                            <button
+                              type="button"
+                              onClick={() => setWizActiveStep(1)}
+                              className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-white/10 text-zinc-300 font-semibold text-xs flex items-center gap-1.5 transition-all"
+                            >
+                              <ArrowLeft className="w-4 h-4" />
+                              <span>Back</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setWizActiveStep(3);
+                                setWizError(null);
+                              }}
+                              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white flex items-center gap-1.5 shadow-lg shadow-indigo-600/15 transition-all"
+                            >
+                              <span>Next: Liabilities</span>
+                              <ArrowRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* STEP 3: LIABILITIES SETUP */}
+                    {wizActiveStep === 3 && (
+                      <motion.div
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="grid grid-cols-1 lg:grid-cols-12 gap-6"
+                      >
+                        {/* Inline Form */}
+                        <div className="lg:col-span-5 bg-zinc-950/40 border border-white/5 p-5 rounded-2xl flex flex-col gap-4">
+                          <div>
+                            <h4 className="text-sm font-bold text-white">Add Obligation / Liability</h4>
+                            <p className="text-[11px] text-zinc-400">Register loans, payments, or monthly obligations.</p>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Obligation Title</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Student Loan, Auto Lease"
+                                value={wizTitle}
+                                onChange={(e) => { setWizTitle(e.target.value); setWizError(null); }}
+                                className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Amount ($)</label>
+                                <input
+                                  type="number"
+                                  placeholder="0.00"
+                                  value={wizAmount}
+                                  onChange={(e) => { setWizAmount(e.target.value); setWizError(null); }}
+                                  className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono font-medium"
+                                />
+                              </div>
+
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Frequency</label>
+                                <select
+                                  value={wizFrequency}
+                                  onChange={(e) => setWizFrequency(e.target.value)}
+                                  className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
+                                >
+                                  <option value="weekly">Weekly</option>
+                                  <option value="biweekly">Bi-Weekly</option>
+                                  <option value="monthly">Monthly</option>
+                                  <option value="quarterly">Quarterly</option>
+                                  <option value="yearly">Yearly</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Next Due Date</label>
+                              <input
+                                type="date"
+                                value={wizStartDate || launchDateStr}
+                                onChange={(e) => setWizStartDate(e.target.value)}
+                                className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono cursor-pointer"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Paid From Account</label>
+                                <select
+                                  value={wizFundingAccountId}
+                                  onChange={(e) => setWizFundingAccountId(e.target.value)}
+                                  className="bg-zinc-900 border border-white/10 rounded-xl px-2.5 py-2 text-[11px] text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
+                                >
+                                  <option value="">Select Asset (Default checking)</option>
+                                  {wizAccounts.filter(a => a.type !== "credit-card").map(acc => (
+                                    <option key={acc.id} value={acc.id}>{acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Reduces Card (Optional)</label>
+                                <select
+                                  value={wizTargetAccountId}
+                                  onChange={(e) => setWizTargetAccountId(e.target.value)}
+                                  className="bg-zinc-900 border border-white/10 rounded-xl px-2.5 py-2 text-[11px] text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
+                                >
+                                  <option value="">Select Credit Card (If applicable)</option>
+                                  {wizAccounts.filter(a => a.type === "credit-card").map(acc => (
+                                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!wizTitle.trim()) { setWizError("Please enter a liability name."); return; }
+                                const amt = parseFloat(wizAmount);
+                                if (isNaN(amt) || amt <= 0) { setWizError("Please enter a valid amount greater than 0."); return; }
+                                const payload: RecurringTransaction = {
+                                  id: generateId(),
+                                  title: wizTitle.trim(),
+                                  amount: amt,
+                                  startDate: wizStartDate || launchDateStr,
+                                  frequency: wizFrequency as any,
+                                  category: "liability",
+                                  fundingAccountId: wizFundingAccountId || undefined,
+                                  targetAccountId: wizTargetAccountId || undefined,
+                                };
+                                setWizTransactions([...wizTransactions, payload]);
+                                setWizTitle("");
+                                setWizAmount("");
+                                setWizFrequency("monthly");
+                                setWizFundingAccountId("");
+                                setWizTargetAccountId("");
+                                setWizError(null);
+                              }}
+                              className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-450 text-black font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-md mt-2"
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span>Add Obligation</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* List Area */}
+                        <div className="lg:col-span-7 flex flex-col justify-between">
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h5 className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-400">Your Liabilities & Obligations</h5>
+                              <span className="text-xs font-bold text-amber-400">
+                                Total: ${wizTransactions.filter(t => t.category === "liability").reduce((acc, c) => acc + c.amount, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} / month
+                              </span>
+                            </div>
+
+                            <div className="bg-zinc-950/20 border border-white/5 rounded-2xl overflow-hidden min-h-[160px] flex flex-col justify-center">
+                              {wizTransactions.filter(t => t.category === "liability").length === 0 ? (
+                                <div className="text-center py-8 text-zinc-500 text-xs italic">
+                                  {"No obligations added. You can skip this step if you don't have recurring liabilities."}
+                                </div>
+                              ) : (
+                                <div className="divide-y divide-white/5 max-h-[220px] overflow-y-auto scrollbar-thin">
+                                  {wizTransactions.filter(t => t.category === "liability").map(t => (
+                                    <div key={t.id} className="flex items-center justify-between p-3.5 hover:bg-zinc-900/30 transition-colors">
+                                      <div>
+                                        <p className="text-xs font-semibold text-white">{t.title}</p>
+                                        <p className="text-[10px] text-zinc-400 capitalize font-mono mt-0.5">
+                                          {t.frequency} &bull; Next due: {t.startDate}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-xs font-mono font-bold text-amber-400">-${t.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setWizTransactions(wizTransactions.filter(tx => tx.id !== t.id))}
+                                          className="p-1.5 text-zinc-500 hover:text-rose-400 rounded-lg hover:bg-zinc-800 transition-colors"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-6 border-t border-white/5 mt-6">
+                            <button
+                              type="button"
+                              onClick={() => setWizActiveStep(2)}
+                              className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-white/10 text-zinc-300 font-semibold text-xs flex items-center gap-1.5 transition-all"
+                            >
+                              <ArrowLeft className="w-4 h-4" />
+                              <span>Back</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setWizActiveStep(4);
+                                setWizError(null);
+                              }}
+                              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white flex items-center gap-1.5 shadow-lg shadow-indigo-600/15 transition-all"
+                            >
+                              <span>Next: Summary & Savings</span>
+                              <ArrowRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* STEP 4: SUMMARY & SAVINGS SETUP */}
+                    {wizActiveStep === 4 && (
+                      <motion.div
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="space-y-6"
+                      >
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                          
+                          {/* Left Column: Summary Overview & Savings Spot */}
+                          <div className="lg:col-span-6 space-y-4">
+                            <div className="bg-zinc-950/40 border border-white/5 p-4 rounded-2xl space-y-3">
+                              <h4 className="text-xs font-bold font-mono text-zinc-400 uppercase tracking-wider">Configure Recurring Savings Target</h4>
+                              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                Enter an amount and frequency to commit to savings. This will be automatically reflected as an outgoing savings allocation.
+                              </p>
+
+                              <div className="flex items-center gap-3 mt-1.5">
+                                <label className="flex items-center gap-2 text-xs font-bold text-white cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={wizSavingsEnabled}
+                                    onChange={(e) => setWizSavingsEnabled(e.target.checked)}
+                                    className="rounded bg-zinc-900 border-white/15 text-indigo-500 focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
+                                  />
+                                  <span>Enable Recurring Savings contribution</span>
+                                </label>
+                              </div>
+
+                              {wizSavingsEnabled && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: "auto" }}
+                                  className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 space-y-1 sm:space-y-0"
+                                >
+                                  <div className="flex flex-col gap-1.5">
+                                    <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-500 uppercase">Savings Name</label>
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. General Savings"
+                                      value={wizSavingsTitle}
+                                      onChange={(e) => setWizSavingsTitle(e.target.value)}
+                                      className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                                    />
+                                  </div>
+
+                                  <div className="flex flex-col gap-1.5">
+                                    <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-500 uppercase">Contribution ($)</label>
+                                    <input
+                                      type="number"
+                                      placeholder="0.00"
+                                      value={wizSavingsAmount}
+                                      onChange={(e) => setWizSavingsAmount(e.target.value)}
+                                      className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono font-medium"
+                                    />
+                                  </div>
+
+                                  <div className="flex flex-col gap-1.5 sm:col-span-2">
+                                    <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-500 uppercase">Frequency</label>
+                                    <select
+                                      value={wizSavingsFrequency}
+                                      onChange={(e) => setWizSavingsFrequency(e.target.value)}
+                                      className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer w-full"
+                                    >
+                                      <option value="weekly">Weekly</option>
+                                      <option value="biweekly">Bi-Weekly</option>
+                                      <option value="monthly">Monthly</option>
+                                      <option value="quarterly">Quarterly</option>
+                                      <option value="yearly">Yearly</option>
+                                    </select>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Right Column: Live Run-Sheet Preview & KPI Totals */}
+                          <div className="lg:col-span-6 bg-zinc-950/20 border border-white/5 rounded-2xl p-5 space-y-4 flex flex-col justify-between">
+                            <div className="space-y-3">
+                              <h4 className="text-xs font-bold font-mono text-zinc-400 uppercase tracking-wider">Review Configuration Metrics</h4>
+                              
+                              <div className="space-y-2 font-mono text-xs text-zinc-300">
+                                <div className="flex justify-between items-center py-1.5 border-b border-white/5">
+                                  <span>Starting Cash Balance</span>
+                                  <span className="font-bold text-white">${initialBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                                </div>
+
+                                <div className="flex justify-between items-center py-1.5 border-b border-white/5">
+                                  <span>Total Monthly Income</span>
+                                  <span className="font-bold text-emerald-400">+${wizTransactions.filter(t => t.category === "income").reduce((acc, c) => acc + c.amount, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                                </div>
+
+                                <div className="flex justify-between items-center py-1.5 border-b border-white/5">
+                                  <span>Recurring Outgoings (Expenses)</span>
+                                  <span className="font-bold text-rose-400">-${wizTransactions.filter(t => t.category === "fixed-expense" || t.category === "subscription").reduce((acc, c) => acc + c.amount, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                                </div>
+
+                                <div className="flex justify-between items-center py-1.5 border-b border-white/5">
+                                  <span>Owings & Liabilities</span>
+                                  <span className="font-bold text-amber-400">-${wizTransactions.filter(t => t.category === "liability").reduce((acc, c) => acc + c.amount, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                                </div>
+
+                                {wizSavingsEnabled && (
+                                  <div className="flex justify-between items-center py-1.5 border-b border-white/5">
+                                    <span>Savings Contribution</span>
+                                    <span className="font-bold text-indigo-400">-${(parseFloat(wizSavingsAmount) || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                                  </div>
+                                )}
+
+                                <div className="flex justify-between items-center pt-2.5">
+                                  <span className="font-bold text-white text-sm">Spendable Margin (Left Over)</span>
+                                  <span className="font-bold text-indigo-300 text-sm">
+                                    ${(
+                                      wizTransactions.filter(t => t.category === "income").reduce((acc, c) => acc + c.amount, 0) -
+                                      (wizTransactions.filter(t => t.category === "fixed-expense" || t.category === "subscription").reduce((acc, c) => acc + c.amount, 0) +
+                                       wizTransactions.filter(t => t.category === "liability").reduce((acc, c) => acc + c.amount, 0) +
+                                       (wizSavingsEnabled ? (parseFloat(wizSavingsAmount) || 0) : 0))
+                                    ).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-4 pt-6 mt-6 border-t border-white/5">
+                              <button
+                                type="button"
+                                onClick={() => setWizActiveStep(3)}
+                                className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-white/10 text-zinc-300 font-semibold text-xs flex items-center gap-1.5 transition-all"
+                              >
+                                <ArrowLeft className="w-4 h-4" />
+                                <span>Back</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const finalTransactions = [...wizTransactions];
+                                  if (wizSavingsEnabled && wizSavingsTitle.trim()) {
+                                    const svAmt = parseFloat(wizSavingsAmount);
+                                    if (svAmt > 0) {
+                                      finalTransactions.push({
+                                        id: generateId(),
+                                        title: wizSavingsTitle.trim(),
+                                        amount: svAmt,
+                                        startDate: wizSavingsStartDate || launchDateStr,
+                                        frequency: wizSavingsFrequency as any,
+                                        category: "savings",
+                                        accountId: wizAccounts.find(a => a.type === "savings")?.id || undefined
+                                      });
+                                    }
+                                  }
+                                  setTransactions(finalTransactions);
+                                  setAccounts(wizAccounts);
+                                  saveToStorage(finalTransactions, launchDateStr, wizAccounts);
+                                  setWizActiveStep(0);
+                                  setWizTransactions([]);
+                                  setWizError(null);
+                                }}
+                                className="px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white flex items-center gap-2 shadow-xl shadow-indigo-600/20 transition-all active:scale-95"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                                <span>Launch Financial OS</span>
+                              </button>
+                            </div>
+                          </div>
+
+                        </div>
+                      </motion.div>
+                    )}
+
+              </div>
+            </div>
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            
+            {/* TAB 1: DASHBOARD VIEW - KPIs and Calendar */}
+            {activeTab === "dashboard" && (
+              <motion.div
+                key="dashboard"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.25 }}
+                className="flex flex-col gap-6 max-w-7xl w-full mx-auto"
+              >
+                
+                {/* Dynamic Header & Starting Parameters Console Panel */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-zinc-900/30 p-5 border border-white/5 rounded-3xl">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
+                      Dashboard
+                    </h2>
+                    <p className="text-xs text-zinc-500">Center your cash timeline projection by picking starting metrics.</p>
                   </div>
 
-                  <div className="mt-5 pt-3 border-t border-white/10 flex items-center gap-2">
-                    <span className="text-xs text-zinc-300">Want to preview with sample data?</span>
-                    <button
-                      onClick={handleLoadSampleData}
-                      className="text-xs font-mono font-bold text-indigo-300 hover:text-indigo-200 underline underline-offset-4"
-                    >
-                      Load Sample Template
-                    </button>
+                  {/* Inline Starting Parameter Inputs - Kept completely clean of sidebar */}
+                  <div className="flex flex-wrap items-center gap-5">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-semibold font-mono tracking-wider text-zinc-300 uppercase">Starting Balance</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-semibold text-zinc-300">$</span>
+                        <input 
+                          type="number"
+                          value={initialBalance}
+                          onChange={(e) => updateInitialBalance(Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="w-28 bg-transparent border-b border-white/20 hover:border-white/40 focus:border-indigo-400 font-mono text-sm text-white focus:outline-none pb-0.5 transition-colors font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="w-px h-8 bg-white/10 hidden sm:block"></div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-semibold font-mono tracking-wider text-zinc-300 uppercase">Starting Date</span>
+                      <input 
+                        type="date"
+                        value={launchDateStr}
+                        onChange={(e) => updateLaunchDate(e.target.value)}
+                        className="bg-transparent border-b border-white/20 hover:border-white/40 focus:border-indigo-400 font-mono text-sm text-white focus:outline-none pb-0.5 cursor-pointer transition-colors font-medium"
+                      />
+                    </div>
                   </div>
                 </div>
-              )}
 
               {/* DYNAMIC KPI METRICS BENTO GRID - Moved to top, sleek & premium */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
@@ -916,9 +2003,6 @@ export default function Home() {
                       ${activeMetrics.income.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </h3>
                   </div>
-                  <div className="w-full bg-zinc-800/80 h-1.5 rounded-full mt-3">
-                    <div className="bg-emerald-400 h-full rounded-full" style={{ width: activeMetrics.income > 0 ? "100%" : "0%" }}></div>
-                  </div>
                 </div>
 
                 {/* 2. EXPENSES CARD */}
@@ -928,9 +2012,6 @@ export default function Home() {
                     <h3 className="text-xl md:text-2xl font-bold mt-1 text-white">
                       ${activeMetrics.expenses.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </h3>
-                  </div>
-                  <div className="w-full bg-zinc-800/80 h-1.5 rounded-full mt-3">
-                    <div className="bg-rose-400 h-full rounded-full" style={{ width: activeMetrics.income > 0 ? `${Math.min(100, (activeMetrics.expenses / activeMetrics.income) * 100)}%` : "30%" }}></div>
                   </div>
                 </div>
 
@@ -942,9 +2023,6 @@ export default function Home() {
                       ${activeMetrics.savings.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </h3>
                   </div>
-                  <div className="w-full bg-zinc-800/80 h-1.5 rounded-full mt-3">
-                    <div className="bg-indigo-400 h-full rounded-full" style={{ width: activeMetrics.income > 0 ? `${Math.min(100, (activeMetrics.savings / activeMetrics.income) * 100)}%` : "15%" }}></div>
-                  </div>
                 </div>
 
                 {/* 4. LIABILITIES CARD */}
@@ -954,9 +2032,6 @@ export default function Home() {
                     <h3 className="text-xl md:text-2xl font-bold mt-1 text-white">
                       ${activeMetrics.liabilities.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </h3>
-                  </div>
-                  <div className="w-full bg-zinc-800/80 h-1.5 rounded-full mt-3">
-                    <div className="bg-amber-400 h-full rounded-full" style={{ width: activeMetrics.income > 0 ? `${Math.min(100, (activeMetrics.liabilities / activeMetrics.income) * 100)}%` : "10%" }}></div>
                   </div>
                 </div>
 
@@ -968,9 +2043,6 @@ export default function Home() {
                       ${activeMetrics.spending.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </h3>
                   </div>
-                  <div className="w-full bg-indigo-950 h-1.5 rounded-full mt-3">
-                    <div className="bg-indigo-400 h-full rounded-full shadow-[0_0_8px_rgba(99,102,241,0.5)]" style={{ width: "100%" }}></div>
-                  </div>
                 </div>
 
                 {/* 6. ENDING BALANCE CARD */}
@@ -980,9 +2052,6 @@ export default function Home() {
                     <h3 className="text-xl md:text-2xl font-bold mt-1 text-white font-mono">
                       ${activeMetrics.endingBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </h3>
-                  </div>
-                  <div className="w-full bg-zinc-800/80 h-1.5 rounded-full mt-3">
-                    <div className={`h-full rounded-full ${activeMetrics.endingBalance >= initialBalance ? "bg-emerald-400" : "bg-orange-400"}`} style={{ width: "100%" }}></div>
                   </div>
                 </div>
 
@@ -1260,6 +2329,318 @@ export default function Home() {
             </motion.div>
           )}
 
+          {/* TAB 1.5: ACCOUNTS MANAGER SCREEN */}
+          {activeTab === "accounts" && (
+            <motion.div
+              key="accounts"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="flex flex-col gap-6 max-w-5xl w-full mx-auto"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
+                    <CreditCard className="w-6 h-6 text-indigo-400" />
+                    Accounts
+                  </h2>
+                  <p className="text-xs text-zinc-500">
+                    Manage checking, savings, and card parameters to track starting liquidity and routing.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xs font-bold text-zinc-400 font-mono">
+                    Net Starting Assets:
+                  </span>
+                  <span className={`text-sm font-bold font-mono ${initialBalance >= 0 ? "text-emerald-400" : "text-amber-400"}`}>
+                    ${initialBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* FORM COLUMN */}
+                <div className="lg:col-span-5 bg-zinc-950/40 border border-white/10 rounded-3xl p-5 space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-white">
+                      {editingAccountId ? "Edit Account Details" : "Register New Account"}
+                    </h3>
+                    <p className="text-[11px] text-zinc-500">
+                      {editingAccountId ? "Modify the parameters or outstanding balance of this account." : "Establish starting balances to anchor your timeline projection."}
+                    </p>
+                  </div>
+
+                  {accFormError && (
+                    <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl flex justify-between items-center">
+                      <span>{accFormError}</span>
+                      <button type="button" onClick={() => setAccFormError(null)} className="font-bold">&times;</button>
+                    </div>
+                  )}
+
+                  <div className="space-y-3.5">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Account Title</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Primary Checking"
+                        value={accFormName}
+                        onChange={(e) => { setAccFormName(e.target.value); setAccFormError(null); }}
+                        className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Starting Balance / Balance ($)</label>
+                        <input
+                          type="number"
+                          placeholder="0.00"
+                          value={accFormBalance}
+                          onChange={(e) => { setAccFormBalance(e.target.value); setAccFormError(null); }}
+                          className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono font-medium"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">Account Type</label>
+                        <select
+                          value={accFormType}
+                          onChange={(e) => { setAccFormType(e.target.value as any); setAccFormError(null); }}
+                          className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
+                        >
+                          <option value="checking">Checking</option>
+                          <option value="savings">Savings</option>
+                          <option value="credit-card">Credit Card</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {accFormType === "other" && (
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold font-mono tracking-wider text-rose-400 uppercase">Custom Type (Required)</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Cash Safe, Brokerage"
+                          value={accFormCustomType}
+                          onChange={(e) => { setAccFormCustomType(e.target.value); setAccFormError(null); }}
+                          className="bg-zinc-900 border border-rose-500/30 focus:border-rose-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none font-medium"
+                        />
+                        <span className="text-[9px] text-zinc-500 italic block">Please enter an account type to avoid ambiguity.</span>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2.5 pt-2">
+                      {editingAccountId ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!accFormName.trim()) { setAccFormError("Please enter an account name."); return; }
+                              if (accFormType === "other" && !accFormCustomType.trim()) {
+                                setAccFormError("Account type cannot be ambiguous. Please specify custom account type.");
+                                return;
+                              }
+                              const balanceNum = parseFloat(accFormBalance) || 0;
+                              const updated = accounts.map(a => a.id === editingAccountId ? {
+                                ...a,
+                                name: accFormName.trim(),
+                                type: accFormType,
+                                customType: accFormType === "other" ? accFormCustomType.trim() : undefined,
+                                balance: Math.max(0, balanceNum),
+                              } : a);
+                              setAccounts(updated);
+                              saveToStorage(transactions, launchDateStr, updated);
+                              setEditingAccountId(null);
+                              setAccFormName("");
+                              setAccFormCustomType("");
+                              setAccFormBalance("");
+                              setAccFormError(null);
+                            }}
+                            className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-md font-semibold"
+                          >
+                            Save Changes
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingAccountId(null);
+                              setAccFormName("");
+                              setAccFormCustomType("");
+                              setAccFormBalance("");
+                              setAccFormError(null);
+                            }}
+                            className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/5 text-zinc-400 font-semibold text-xs transition-all"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!accFormName.trim()) { setAccFormError("Please enter an account name."); return; }
+                            if (accFormType === "other" && !accFormCustomType.trim()) {
+                              setAccFormError("Account type cannot be ambiguous. Please specify custom account type.");
+                              return;
+                            }
+                            const balanceNum = parseFloat(accFormBalance) || 0;
+                            const newId = "acc_" + String(new Date().getTime());
+                            const newAcc: Account = {
+                              id: newId,
+                              name: accFormName.trim(),
+                              type: accFormType,
+                              customType: accFormType === "other" ? accFormCustomType.trim() : undefined,
+                              balance: Math.max(0, balanceNum),
+                            };
+
+                            const updated = [...accounts, newAcc];
+                            setAccounts(updated);
+
+                            // If credit card, automatically create a liability minimum payment placeholder
+                            let updatedTx = [...transactions];
+                            if (accFormType === "credit-card") {
+                              const matchingLiability: RecurringTransaction = {
+                                id: "l_" + String(new Date().getTime()),
+                                title: `${accFormName.trim()} Minimum Payment`,
+                                amount: 0, // Ask user to configure in liabilities
+                                startDate: launchDateStr,
+                                frequency: "monthly",
+                                category: "liability",
+                                targetAccountId: newId,
+                              };
+                              updatedTx.push(matchingLiability);
+                              setTransactions(updatedTx);
+                            }
+
+                            saveToStorage(updatedTx, launchDateStr, updated);
+                            setAccFormName("");
+                            setAccFormCustomType("");
+                            setAccFormBalance("");
+                            setAccFormError(null);
+                          }}
+                          className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md font-semibold"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Register Account</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* LIST COLUMN */}
+                <div className="lg:col-span-7 space-y-4">
+                  <h3 className="text-xs font-bold font-mono tracking-wider text-zinc-400 uppercase">Registered Accounts</h3>
+                  {accounts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 bg-zinc-900/15 border border-dashed border-white/5 rounded-3xl text-center">
+                      <CreditCard className="w-12 h-12 text-zinc-600 mb-3" />
+                      <p className="text-sm font-bold text-zinc-300">No Registered Accounts</p>
+                      <p className="text-xs text-zinc-500 max-w-xs mt-1">
+                        Add a checking or savings account above to establish your asset bases and starting projection balances.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {accounts.map(acc => {
+                        // Check if this is a credit card and find its minimum payment liability
+                        const linkedLiability = transactions.find(t => t.category === "liability" && t.targetAccountId === acc.id);
+
+                        return (
+                          <div
+                            key={acc.id}
+                            className="bg-zinc-900/40 border border-white/10 rounded-2xl p-4.5 flex flex-col justify-between hover:border-indigo-500/40 transition-all group"
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="text-sm font-bold text-white">{acc.name}</h4>
+                                <span className={`text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md inline-block mt-1 ${
+                                  acc.type === "credit-card"
+                                    ? "bg-amber-500/10 text-amber-400 border border-amber-500/15"
+                                    : acc.type === "savings"
+                                    ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/15"
+                                    : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/15"
+                                }`}>
+                                  {acc.type === "other" ? acc.customType || "Other" : acc.type}
+                                </span>
+                              </div>
+                              <span className={`text-base font-bold font-mono ${acc.type === "credit-card" ? "text-amber-400" : "text-emerald-400"}`}>
+                                {acc.type === "credit-card" ? "-" : ""}${acc.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+
+                            {/* Additional info block */}
+                            {acc.type === "credit-card" && (
+                              <div className="mt-3.5 pt-3.5 border-t border-white/5">
+                                {linkedLiability ? (
+                                  <div className="flex justify-between items-center text-[10px] text-zinc-400">
+                                    <span>Scheduled Payment:</span>
+                                    <span className="font-mono font-bold text-white">${linkedLiability.amount}/mo</span>
+                                  </div>
+                                ) : (
+                                  <div className="p-2 bg-amber-500/5 border border-amber-500/10 rounded-xl flex flex-col gap-1">
+                                    <span className="text-[10px] text-amber-400 font-bold">Needs Minimum Payment Setup</span>
+                                    <span className="text-[9px] text-zinc-400">No scheduled payment found in liabilities. Add one to keep your forecast precise.</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            <div className="flex gap-3 justify-end mt-4 pt-3.5 border-t border-white/5 opacity-80 group-hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingAccountId(acc.id);
+                                  setAccFormName(acc.name);
+                                  setAccFormType(acc.type);
+                                  setAccFormCustomType(acc.customType || "");
+                                  setAccFormBalance(String(acc.balance));
+                                  setAccFormError(null);
+                                }}
+                                className="text-[10px] font-bold font-mono uppercase text-indigo-400 hover:text-indigo-300 transition-colors"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to remove the account "${acc.name}"? This will also remove any transactions routed to or funded by this account.`)) {
+                                    const updatedAccs = accounts.filter(a => a.id !== acc.id);
+                                    // Remove routed transactions or set their accountId/fundingAccountId/targetAccountId to undefined
+                                    const updatedTxs = transactions.filter(t => t.targetAccountId !== acc.id).map(t => {
+                                      let changed = false;
+                                      const newT = { ...t };
+                                      if (t.accountId === acc.id) { newT.accountId = undefined; changed = true; }
+                                      if (t.fundingAccountId === acc.id) { newT.fundingAccountId = undefined; changed = true; }
+                                      return newT;
+                                    });
+                                    setAccounts(updatedAccs);
+                                    setTransactions(updatedTxs);
+                                    saveToStorage(updatedTxs, launchDateStr, updatedAccs);
+                                    if (editingAccountId === acc.id) {
+                                      setEditingAccountId(null);
+                                      setAccFormName("");
+                                      setAccFormCustomType("");
+                                      setAccFormBalance("");
+                                    }
+                                  }
+                                }}
+                                className="text-[10px] font-bold font-mono uppercase text-rose-400 hover:text-rose-300 transition-colors font-bold"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* TAB 2: INCOME MANAGER SCREEN */}
           {activeTab === "income" && (
             <motion.div
@@ -1276,7 +2657,7 @@ export default function Home() {
                     Income
                   </h2>
                   <p className="text-xs text-zinc-500">
-                    Register and edit your recurring paychecks, freelance streams, or basic salary events.
+                    Register and edit your recurring paychecks, salaries, or other recurring income sources.
                   </p>
                 </div>
 
@@ -1295,7 +2676,7 @@ export default function Home() {
 
               {categorizedTransactions.income.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 bg-zinc-900/15 border border-dashed border-white/5 rounded-3xl text-center">
-                  <Coins className="w-12 h-12 text-zinc-650 mb-3" />
+                  <Coins className="w-12 h-12 text-zinc-600 mb-3" />
                   <p className="text-sm font-bold text-zinc-300">No Recurring Income Registered</p>
                   <p className="text-xs text-zinc-300 max-w-xs mt-1">
                     Every dynamic forecast needs at least one regular paycheck payload to build an available spend margin.
@@ -1621,7 +3002,7 @@ export default function Home() {
           )}
 
         </AnimatePresence>
-
+        )}
       </main>
 
       {/* 3 SEPARATE MULTI-STEP TRANSACTION WIZARDS */}
@@ -1697,7 +3078,7 @@ export default function Home() {
                             type="text"
                             required
                             autoFocus
-                            placeholder="e.g. Primary Salary, Client Retainer, Side Revenue"
+                            placeholder="e.g. Primary Salary, Client Retainer, Side Gig"
                             value={formTitle}
                             onChange={(e) => {
                               setFormTitle(e.target.value);
@@ -1848,6 +3229,22 @@ export default function Home() {
                       <form onSubmit={handleSaveTransaction} className="space-y-4">
                         <div>
                           <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
+                            Deposit to Account
+                          </label>
+                          <select
+                            value={formAccountId}
+                            onChange={(e) => setFormAccountId(e.target.value)}
+                            className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-emerald-500 text-zinc-100 transition-colors cursor-pointer"
+                          >
+                            <option value="">Select Asset Account (Default checking)</option>
+                            {accounts.filter(a => a.type !== "credit-card").map(acc => (
+                              <option key={acc.id} value={acc.id}>{acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
                             First Pay Date
                           </label>
                           <input
@@ -1882,6 +3279,12 @@ export default function Home() {
                           <div className="flex justify-between text-zinc-300">
                             <span>Amount & Cycle:</span>
                             <span className="font-semibold text-emerald-400 font-mono">${formAmount} ({formFrequency})</span>
+                          </div>
+                          <div className="flex justify-between text-zinc-300">
+                            <span>Deposit To:</span>
+                            <span className="font-semibold text-white">
+                              {accounts.find(a => a.id === formAccountId)?.name || "Default checking"}
+                            </span>
                           </div>
                           <div className="flex justify-between text-zinc-300">
                             <span>First Deposit:</span>
@@ -2017,7 +3420,7 @@ export default function Home() {
                                 ? "e.g. Rent, Electricity, Grocery Budget"
                                 : formCategory === "subscription"
                                 ? "e.g. Netflix, Spotify, iCloud Storage"
-                                : "e.g. Emergency Reservoir, High-Yield Savings"
+                                : "e.g. Liquid Reserve, High-Yield Savings"
                             }
                             value={formTitle}
                             onChange={(e) => {
@@ -2036,7 +3439,7 @@ export default function Home() {
                             {(formCategory === "subscription"
                               ? ["Netflix", "Spotify", "Amazon Prime", "iCloud", "Gym"]
                               : formCategory === "savings"
-                              ? ["Emergency Fund", "Travel Vault", "Investment Reserve", "Tax Buffer"]
+                              ? ["Liquid Reserve", "Travel Vault", "Investment Reserve", "Tax Buffer"]
                               : ["Apartment Rent", "Electric Utility", "Water & Sewage", "Internet Fiber", "Groceries"]
                             ).map(preset => (
                               <button
@@ -2156,6 +3559,60 @@ export default function Home() {
                     {/* Step 3: Due Date & Final Review */}
                     {wizardStep === 3 && (
                       <form onSubmit={handleSaveTransaction} className="space-y-4">
+                        {formCategory === "savings" ? (
+                          <>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
+                                  Transfer From
+                                </label>
+                                <select
+                                  value={formFundingAccountId}
+                                  onChange={(e) => setFormFundingAccountId(e.target.value)}
+                                  className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 text-zinc-100 transition-colors cursor-pointer"
+                                >
+                                  <option value="">Select Account (Default checking)</option>
+                                  {accounts.filter(a => a.type !== "credit-card").map(acc => (
+                                    <option key={acc.id} value={acc.id}>{acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
+                                  Route To
+                                </label>
+                                <select
+                                  value={formTargetAccountId}
+                                  onChange={(e) => setFormTargetAccountId(e.target.value)}
+                                  className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 text-zinc-100 transition-colors cursor-pointer"
+                                >
+                                  <option value="">Select Account (Default savings)</option>
+                                  {accounts.filter(a => a.type !== "credit-card").map(acc => (
+                                    <option key={acc.id} value={acc.id}>{acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div>
+                            <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
+                              Paid From Account
+                            </label>
+                            <select
+                              value={formFundingAccountId}
+                              onChange={(e) => setFormFundingAccountId(e.target.value)}
+                              className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-rose-500 text-zinc-100 transition-colors cursor-pointer"
+                            >
+                              <option value="">Select Account (Default checking)</option>
+                              {accounts.map(acc => (
+                                <option key={acc.id} value={acc.id}>{acc.name} ({acc.type === "credit-card" ? "Credit Card" : (acc.type === "other" ? acc.customType || "Other" : acc.type)})</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
                         <div>
                           <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
                             Next Due Date
@@ -2197,6 +3654,29 @@ export default function Home() {
                             <span>Amount & Cycle:</span>
                             <span className="font-semibold text-rose-400 font-mono">${formAmount} ({formFrequency})</span>
                           </div>
+                          {formCategory === "savings" ? (
+                            <>
+                              <div className="flex justify-between text-zinc-300">
+                                <span>Transfer From:</span>
+                                <span className="font-semibold text-white">
+                                  {accounts.find(a => a.id === formFundingAccountId)?.name || "Default checking"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-zinc-300">
+                                <span>Route To:</span>
+                                <span className="font-semibold text-white font-mono">
+                                  {accounts.find(a => a.id === formTargetAccountId)?.name || "Default savings"}
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex justify-between text-zinc-300">
+                              <span>Paid From:</span>
+                              <span className="font-semibold text-white">
+                                {accounts.find(a => a.id === formFundingAccountId)?.name || "Default checking"}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex justify-between text-zinc-300">
                             <span>Next Due Date:</span>
                             <span className="font-semibold text-white font-mono">{formStartDate}</span>
@@ -2433,6 +3913,40 @@ export default function Home() {
                     {/* Step 3: First Due Date & Final Terms Review */}
                     {wizardStep === 3 && (
                       <form onSubmit={handleSaveTransaction} className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
+                              Paid From Account
+                            </label>
+                            <select
+                              value={formFundingAccountId}
+                              onChange={(e) => setFormFundingAccountId(e.target.value)}
+                              className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 transition-colors cursor-pointer"
+                            >
+                              <option value="">Select Asset Account (Default checking)</option>
+                              {accounts.filter(a => a.type !== "credit-card").map(acc => (
+                                <option key={acc.id} value={acc.id}>{acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
+                              Apply to Credit Card (Optional)
+                            </label>
+                            <select
+                              value={formTargetAccountId}
+                              onChange={(e) => setFormTargetAccountId(e.target.value)}
+                              className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 transition-colors cursor-pointer"
+                            >
+                              <option value="">Select Credit Card (If applicable)</option>
+                              {accounts.filter(a => a.type === "credit-card").map(acc => (
+                                <option key={acc.id} value={acc.id}>{acc.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
                         <div>
                           <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
                             First Due Date
@@ -2470,6 +3984,20 @@ export default function Home() {
                             <span>Payment & Cycle:</span>
                             <span className="font-semibold text-amber-400 font-mono">${formAmount} ({formFrequency})</span>
                           </div>
+                          <div className="flex justify-between text-zinc-300">
+                            <span>Paid From:</span>
+                            <span className="font-semibold text-white">
+                              {accounts.find(a => a.id === formFundingAccountId)?.name || "Default checking"}
+                            </span>
+                          </div>
+                          {formTargetAccountId && (
+                            <div className="flex justify-between text-zinc-300">
+                              <span>Reduces Card:</span>
+                              <span className="font-semibold text-amber-400">
+                                {accounts.find(a => a.id === formTargetAccountId)?.name}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex justify-between text-zinc-300">
                             <span>First Due Date:</span>
                             <span className="font-semibold text-white font-mono">{formStartDate}</span>
@@ -2577,7 +4105,7 @@ export default function Home() {
 
                 {selectedDay.transactions.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-zinc-500 italic text-xs text-center">
-                    <CheckCircle className="w-8 h-8 text-zinc-650 mb-2 opacity-50" />
+                    <CheckCircle className="w-8 h-8 text-zinc-600 mb-2 opacity-50" />
                     <p>No transactions scheduled on this date.</p>
                   </div>
                 ) : (
@@ -2597,7 +4125,7 @@ export default function Home() {
                         </div>
                         <div className="text-right">
                           <span className={`text-xs font-mono font-bold ${t.item.category === "income" ? "text-emerald-400" : "text-rose-400"}`}>
-                            {t.item.category === "income" ? "+" : "-"}${t.amount.toLocaleString("en-US")}
+                            {t.item.category === "income" ? "+" : "-"}${Math.abs(t.amount).toLocaleString("en-US")}
                           </span>
                         </div>
                       </div>

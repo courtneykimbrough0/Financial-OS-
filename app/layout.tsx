@@ -15,8 +15,9 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: 'FutureFlow | Recurring Transactions Forecast',
-  description: 'A futuristic, space-age personal cash-flow forecasting application tracking recurring incoming, outgoings, owings, and savings.',
+  title: 'Financial OS',
+  description: 'A personal cash-flow forecasting application tracking recurring incomes, expenses, liabilities, and savings.',
+  manifest: '/manifest.json',
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {

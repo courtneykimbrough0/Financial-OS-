@@ -1,6 +1,6 @@
 {
-  "name": "Recurring Transactions Forecast",
-  "description": "A web-based PWA forecasting tool for managing and predicting recurring incoming and outgoing transactions, savings, and remaining spendable amount.",
+  "name": "Financial OS",
+  "description": "A financial forecasting tool for managing and predicting recurring income, expenses, liabilities, and savings.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
