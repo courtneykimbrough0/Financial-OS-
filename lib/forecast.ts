@@ -24,6 +24,18 @@ export interface RecurringTransaction {
   accountId?: string; // Primary account connected (for income, fixed-expense, subscription)
   fundingAccountId?: string; // Funding source (checking/savings) for liability/savings payments
   targetAccountId?: string; // Destination account (e.g., credit-card outstanding balance or savings account)
+  liabilityType?: 'credit_card' | 'revolving_loc' | 'auto_loan' | 'mortgage' | 'personal_loan' | 'student_loan' | 'other';
+  interestRate?: number; // Annual Percentage Rate (APR %) e.g. 21.99
+  currentBalance?: number; // Current outstanding balance owed
+  startingBalance?: number; // Original / starting balance
+  creditLimit?: number; // Total credit limit (for credit cards / lines of credit)
+  minimumPayment?: number; // Minimum required monthly payment
+  balanceTransferFee?: number; // Fee % for balance transfer
+  balanceTransferFeeMin?: number; // Minimum $ fee for balance transfer
+  promoRate?: number; // Promotional APR %
+  promoEndDate?: string; // Promotional APR end date (YYYY-MM-DD)
+  minimumPaymentCalc?: 'fixed' | 'percent_principal' | 'percent_principal_interest';
+  dayOfMonth?: string; // Due day of month (e.g. "1".."31" or "Last")
 }
 
 export interface ForecastDay {
@@ -85,6 +97,473 @@ export function isYearlyMatch(day: Date, startDay: Date): boolean {
   return day.getMonth() === startDay.getMonth() && isMonthlyMatch(day, startDay);
 }
 
+// Helper to convert any frequency into a standard baseline monthly amount
+export function getMonthlyEquivalent(t: { amount: number; frequency: TransactionFrequency; semiMonthlyDays?: number[] }): number {
+  if (!t.amount || isNaN(t.amount)) return 0;
+  switch (t.frequency) {
+    case 'daily':
+      return t.amount * 30; // standard 30 days/mo baseline
+    case 'weekly':
+      return t.amount * 4; // standard 4 payweeks/mo baseline (e.g. 4 x $500 = $2,000)
+    case 'biweekly':
+      return t.amount * 2; // standard 2 pay periods/mo baseline (e.g. 2 x $2,000 = $4,000)
+    case 'semimonthly': {
+      const daysCount = (t.semiMonthlyDays && t.semiMonthlyDays.length > 0) ? t.semiMonthlyDays.length : 2;
+      return t.amount * daysCount; // standard 2 per month
+    }
+    case 'monthly':
+      return t.amount;
+    case 'quarterly':
+      return t.amount / 3; // $300 quarterly = $100/mo baseline
+    case 'yearly':
+      return t.amount / 12; // $1,200 yearly = $100/mo baseline
+    default:
+      return t.amount;
+  }
+}
+
+// Helper to convert any frequency into a standard quarterly total amount (3 months)
+export function getQuarterlyEquivalent(t: { amount: number; frequency: TransactionFrequency; semiMonthlyDays?: number[] }): number {
+  if (!t.amount || isNaN(t.amount)) return 0;
+  switch (t.frequency) {
+    case 'daily':
+      return t.amount * 90; // 90 days/quarter
+    case 'weekly':
+      return t.amount * 12; // 12 weeks/quarter baseline (4 weeks x 3 months)
+    case 'biweekly':
+      return t.amount * 6; // 6 biweeks/quarter baseline (2 biweeks x 3 months)
+    case 'semimonthly': {
+      const daysCount = (t.semiMonthlyDays && t.semiMonthlyDays.length > 0) ? t.semiMonthlyDays.length : 2;
+      return t.amount * daysCount * 3;
+    }
+    case 'monthly':
+      return t.amount * 3; // 3 months/quarter
+    case 'quarterly':
+      return t.amount; // 1 payment per quarter
+    case 'yearly':
+      return t.amount / 4; // 1/4 of annual payment per quarter
+    default:
+      return t.amount * 3;
+  }
+}
+
+// Helper to convert any frequency into an annualized yearly total amount
+export function getYearlyEquivalent(t: { amount: number; frequency: TransactionFrequency; semiMonthlyDays?: number[] }): number {
+  if (!t.amount || isNaN(t.amount)) return 0;
+  switch (t.frequency) {
+    case 'daily':
+      return t.amount * 365;
+    case 'weekly':
+      return t.amount * 52; // 52 payweeks in a year (includes the 4 extra 5th payweeks)
+    case 'biweekly':
+      return t.amount * 26; // 26 biweeks in a year (includes the 2 extra 3rd paychecks)
+    case 'semimonthly': {
+      const daysCount = (t.semiMonthlyDays && t.semiMonthlyDays.length > 0) ? t.semiMonthlyDays.length : 2;
+      return t.amount * daysCount * 12;
+    }
+    case 'monthly':
+      return t.amount * 12;
+    case 'quarterly':
+      return t.amount * 4;
+    case 'yearly':
+      return t.amount;
+    default:
+      return t.amount * 12;
+  }
+}
+
+// Calculate exact occurrences of a transaction in a specific calendar month
+export function getOccurrencesInMonth(
+  t: RecurringTransaction,
+  year: number,
+  monthIndex: number // 0-indexed (0 = Jan, 11 = Dec)
+): number {
+  if (!t.amount || isNaN(t.amount)) return 0;
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  let count = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dayDate = new Date(year, monthIndex, d);
+    if (isTransactionOccurring(dayDate, t)) {
+      count++;
+    }
+  }
+  return count;
+}
+
+// Calculate exact occurrences of a transaction in a specific calendar quarter
+export function getOccurrencesInQuarter(
+  t: RecurringTransaction,
+  year: number,
+  quarterNum: number // 1, 2, 3, or 4
+): number {
+  if (!t.amount || isNaN(t.amount)) return 0;
+  const startMonth = (quarterNum - 1) * 3;
+  let totalOccurrences = 0;
+  for (let m = startMonth; m < startMonth + 3; m++) {
+    totalOccurrences += getOccurrencesInMonth(t, year, m);
+  }
+  return totalOccurrences;
+}
+
+// Calculate actual dollar total for a specific month
+export function getActualMonthlyTotal(
+  t: RecurringTransaction,
+  year: number,
+  monthIndex: number
+): number {
+  return t.amount * getOccurrencesInMonth(t, year, monthIndex);
+}
+
+// Calculate actual dollar total for a specific quarter
+export function getActualQuarterlyTotal(
+  t: RecurringTransaction,
+  year: number,
+  quarterNum: number
+): number {
+  return t.amount * getOccurrencesInQuarter(t, year, quarterNum);
+}
+
+export interface PayoffDetails {
+  monthsToPayoff: number | null;
+  totalInterestPaid: number;
+  dailyInterest: number;
+  monthlyInterest: number;
+  dailyInterestAccrual: number;
+  monthlyInterestAccrual: number;
+  payoffDate: string | null;
+  payoffDateStr: string;
+  isPayoffPossible: boolean;
+  message?: string;
+}
+
+export function calculatePayoffDetails(
+  txOrBalance: RecurringTransaction | number,
+  aprInput?: number,
+  monthlyPaymentInput?: number
+): PayoffDetails {
+  let currentBalance = 0;
+  let apr = 0;
+  let monthlyPayment = 0;
+
+  if (typeof txOrBalance === "object" && txOrBalance !== null) {
+    currentBalance = txOrBalance.currentBalance || 0;
+    apr = txOrBalance.interestRate || 0;
+    monthlyPayment = getMonthlyEquivalent(txOrBalance) || txOrBalance.amount || 0;
+  } else {
+    currentBalance = typeof txOrBalance === "number" ? txOrBalance : 0;
+    apr = aprInput || 0;
+    monthlyPayment = monthlyPaymentInput || 0;
+  }
+
+  if (!currentBalance || currentBalance <= 0) {
+    return {
+      monthsToPayoff: 0,
+      totalInterestPaid: 0,
+      dailyInterest: 0,
+      monthlyInterest: 0,
+      dailyInterestAccrual: 0,
+      monthlyInterestAccrual: 0,
+      payoffDate: "Paid Off",
+      payoffDateStr: "Paid Off",
+      isPayoffPossible: true,
+    };
+  }
+
+  const aprValue = Math.max(0, apr || 0);
+  const monthlyRate = aprValue / 100 / 12;
+  const dailyInterest = (currentBalance * (aprValue / 100)) / 365;
+  const monthlyInterest = currentBalance * monthlyRate;
+
+  if (monthlyPayment <= monthlyInterest && aprValue > 0) {
+    return {
+      monthsToPayoff: null,
+      totalInterestPaid: Infinity,
+      dailyInterest: Math.round(dailyInterest * 100) / 100,
+      monthlyInterest: Math.round(monthlyInterest * 100) / 100,
+      dailyInterestAccrual: Math.round(dailyInterest * 100) / 100,
+      monthlyInterestAccrual: Math.round(monthlyInterest * 100) / 100,
+      payoffDate: null,
+      payoffDateStr: "Infinite",
+      isPayoffPossible: false,
+      message: "Monthly payment does not cover interest!",
+    };
+  }
+
+  let balance = currentBalance;
+  let months = 0;
+  let totalInterest = 0;
+
+  while (balance > 0.01 && months < 600) {
+    const interest = balance * monthlyRate;
+    totalInterest += interest;
+    const principalPaid = monthlyPayment - interest;
+    balance -= principalPaid;
+    months++;
+  }
+
+  const targetDate = new Date();
+  targetDate.setMonth(targetDate.getMonth() + months);
+  const payoffDate = targetDate.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+
+  return {
+    monthsToPayoff: months,
+    totalInterestPaid: Math.round(totalInterest * 100) / 100,
+    dailyInterest: Math.round(dailyInterest * 100) / 100,
+    monthlyInterest: Math.round(monthlyInterest * 100) / 100,
+    dailyInterestAccrual: Math.round(dailyInterest * 100) / 100,
+    monthlyInterestAccrual: Math.round(monthlyInterest * 100) / 100,
+    payoffDate,
+    payoffDateStr: payoffDate,
+    isPayoffPossible: true,
+  };
+}
+
+export interface PayoffStrategyResult {
+  strategy: 'avalanche' | 'snowball' | 'minimums';
+  totalMonths: number | null;
+  debtFreeDateStr: string;
+  totalInterestPaid: number;
+  totalPrincipalPaid: number;
+  totalPaid: number;
+  debtPayoffOrder: {
+    id: string;
+    title: string;
+    startingBalance: number;
+    apr: number;
+    eliminatedMonth: number;
+    eliminatedDateStr: string;
+    totalInterestForThisDebt: number;
+  }[];
+  payoffOrder: {
+    id: string;
+    title: string;
+    currentBalance: number;
+    interestRate: number;
+    monthEliminated: number;
+    payoffDateStr: string;
+    interestPaid: number;
+  }[];
+  monthlySnapshots: {
+    monthIndex: number;
+    dateStr: string;
+    totalRemainingBalance: number;
+    totalInterestPaidCumulative: number;
+  }[];
+}
+
+export function simulateDebtPayoff(
+  liabilities: RecurringTransaction[],
+  extraMonthlyBudgetOrStrategy: number | 'avalanche' | 'snowball' | 'minimums' = 0,
+  strategyOrBudget: 'avalanche' | 'snowball' | 'minimums' | number = 'avalanche'
+): PayoffStrategyResult {
+  let extraMonthlyBudget = 0;
+  let strategy: 'avalanche' | 'snowball' | 'minimums' = 'avalanche';
+
+  if (typeof extraMonthlyBudgetOrStrategy === 'number') {
+    extraMonthlyBudget = extraMonthlyBudgetOrStrategy;
+    strategy = typeof strategyOrBudget === 'string' ? strategyOrBudget : 'avalanche';
+  } else {
+    strategy = extraMonthlyBudgetOrStrategy;
+    extraMonthlyBudget = typeof strategyOrBudget === 'number' ? strategyOrBudget : 0;
+  }
+
+  const activeDebts = liabilities
+    .filter((t) => t.category === "liability")
+    .map((t) => {
+      const bal = t.currentBalance && t.currentBalance > 0 ? t.currentBalance : (t.startingBalance || t.amount * 12);
+      const minP = t.minimumPayment && t.minimumPayment > 0 ? t.minimumPayment : t.amount;
+      return {
+        id: t.id,
+        title: t.title,
+        balance: bal,
+        startingBalance: bal,
+        apr: t.interestRate || 0,
+        minPayment: minP,
+        scheduledPayment: Math.max(t.amount, minP),
+        eliminatedMonth: 0,
+        eliminatedDateStr: "",
+        totalInterestForThisDebt: 0,
+      };
+    });
+
+  const initialTotalBalance = activeDebts.reduce((sum, d) => sum + d.balance, 0);
+
+  if (activeDebts.length === 0 || initialTotalBalance <= 0) {
+    return {
+      strategy,
+      totalMonths: 0,
+      debtFreeDateStr: "Debt-Free!",
+      totalInterestPaid: 0,
+      totalPrincipalPaid: 0,
+      totalPaid: 0,
+      debtPayoffOrder: [],
+      payoffOrder: [],
+      monthlySnapshots: [],
+    };
+  }
+
+  let currentMonth = 0;
+  let totalInterestCumulative = 0;
+  let totalPaidCumulative = 0;
+  const snapshots: PayoffStrategyResult['monthlySnapshots'] = [];
+  const payoffOrder: PayoffStrategyResult['debtPayoffOrder'] = [];
+  const simplePayoffOrder: PayoffStrategyResult['payoffOrder'] = [];
+
+  const now = new Date();
+
+  while (activeDebts.some((d) => d.balance > 0.01) && currentMonth < 360) {
+    currentMonth++;
+    const monthDate = new Date(now.getFullYear(), now.getMonth() + currentMonth, 1);
+    const monthDateStr = monthDate.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+
+    // 1. Monthly interest accrual
+    for (const debt of activeDebts) {
+      if (debt.balance > 0.01) {
+        const monthlyInterest = debt.balance * (debt.apr / 100 / 12);
+        debt.balance += monthlyInterest;
+        debt.totalInterestForThisDebt += monthlyInterest;
+        totalInterestCumulative += monthlyInterest;
+      }
+    }
+
+    // 2. Scheduled payments
+    let extraPool = strategy === 'minimums' ? 0 : extraMonthlyBudget;
+
+    for (const debt of activeDebts) {
+      if (debt.balance > 0.01) {
+        const payAmount = Math.min(debt.balance, debt.scheduledPayment);
+        debt.balance -= payAmount;
+        totalPaidCumulative += payAmount;
+
+        if (debt.balance <= 0.01) {
+          debt.balance = 0;
+          if (!debt.eliminatedMonth) {
+            debt.eliminatedMonth = currentMonth;
+            debt.eliminatedDateStr = monthDateStr;
+            payoffOrder.push({
+              id: debt.id,
+              title: debt.title,
+              startingBalance: Math.round(debt.startingBalance),
+              apr: debt.apr,
+              eliminatedMonth: currentMonth,
+              eliminatedDateStr: monthDateStr,
+              totalInterestForThisDebt: Math.round(debt.totalInterestForThisDebt),
+            });
+            simplePayoffOrder.push({
+              id: debt.id,
+              title: debt.title,
+              currentBalance: Math.round(debt.startingBalance),
+              interestRate: debt.apr,
+              monthEliminated: currentMonth,
+              payoffDateStr: monthDateStr,
+              interestPaid: Math.round(debt.totalInterestForThisDebt),
+            });
+          }
+        }
+      } else {
+        if (strategy !== 'minimums') {
+          extraPool += debt.scheduledPayment; // Snowball roll-over!
+        }
+      }
+    }
+
+    // 3. Extra pool applied to top target debt
+    if (extraPool > 0 && activeDebts.some((d) => d.balance > 0.01)) {
+      const remainingDebts = activeDebts.filter((d) => d.balance > 0.01);
+      remainingDebts.sort((a, b) => {
+        if (strategy === 'avalanche') {
+          return b.apr - a.apr; // Highest APR first
+        } else {
+          return a.balance - b.balance; // Lowest balance first
+        }
+      });
+
+      for (const targetDebt of remainingDebts) {
+        if (extraPool <= 0) break;
+        const extraPay = Math.min(targetDebt.balance, extraPool);
+        targetDebt.balance -= extraPay;
+        extraPool -= extraPay;
+        totalPaidCumulative += extraPay;
+
+        if (targetDebt.balance <= 0.01) {
+          targetDebt.balance = 0;
+          if (!targetDebt.eliminatedMonth) {
+            targetDebt.eliminatedMonth = currentMonth;
+            targetDebt.eliminatedDateStr = monthDateStr;
+            payoffOrder.push({
+              id: targetDebt.id,
+              title: targetDebt.title,
+              startingBalance: Math.round(targetDebt.startingBalance),
+              apr: targetDebt.apr,
+              eliminatedMonth: currentMonth,
+              eliminatedDateStr: monthDateStr,
+              totalInterestForThisDebt: Math.round(targetDebt.totalInterestForThisDebt),
+            });
+            simplePayoffOrder.push({
+              id: targetDebt.id,
+              title: targetDebt.title,
+              currentBalance: Math.round(targetDebt.startingBalance),
+              interestRate: targetDebt.apr,
+              monthEliminated: currentMonth,
+              payoffDateStr: monthDateStr,
+              interestPaid: Math.round(targetDebt.totalInterestForThisDebt),
+            });
+          }
+        }
+      }
+    }
+
+    const remainingBal = activeDebts.reduce((s, d) => s + d.balance, 0);
+
+    snapshots.push({
+      monthIndex: currentMonth,
+      dateStr: monthDateStr,
+      totalRemainingBalance: Math.round(remainingBal),
+      totalInterestPaidCumulative: Math.round(totalInterestCumulative),
+    });
+  }
+
+  const finalDate = new Date(now.getFullYear(), now.getMonth() + currentMonth, 1);
+  const debtFreeDateStr = finalDate.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+
+  return {
+    strategy,
+    totalMonths: currentMonth,
+    debtFreeDateStr,
+    totalInterestPaid: Math.round(totalInterestCumulative),
+    totalPrincipalPaid: Math.round(initialTotalBalance),
+    totalPaid: Math.round(totalPaidCumulative),
+    debtPayoffOrder: payoffOrder,
+    payoffOrder: simplePayoffOrder,
+    monthlySnapshots: snapshots,
+  };
+}
+
+// Helper to get formatted breakdown text for UI item cards
+export function getFrequencySubtext(t: { amount: number; frequency: TransactionFrequency; semiMonthlyDays?: number[] }): string {
+  const m = getMonthlyEquivalent(t);
+  const q = getQuarterlyEquivalent(t);
+  const fmt = (val: number) => val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  switch (t.frequency) {
+    case 'biweekly':
+      return `Base: $${fmt(m)}/mo (2x) • $${fmt(q)}/qtr (6x) • Extra 3rd paycheck in 3-paycheck months (7x/qtr)`;
+    case 'weekly':
+      return `Base: $${fmt(m)}/mo (4x) • $${fmt(q)}/qtr (12x) • Extra 5th paycheck in 5-payweek months (13x/qtr)`;
+    case 'semimonthly':
+      return `Base: $${fmt(m)}/mo (2x) • $${fmt(q)}/qtr (6x) • Semi-monthly (fixed days)`;
+    case 'quarterly':
+      return `Base: $${fmt(m)}/mo • $${fmt(q)}/qtr (1x per quarter)`;
+    case 'yearly':
+      return `Base: $${fmt(m)}/mo • $${fmt(q)}/qtr • $${fmt(getYearlyEquivalent(t))}/yr`;
+    case 'daily':
+      return `Base: $${fmt(m)}/mo (30d) • $${fmt(q)}/qtr (90d)`;
+    case 'monthly':
+    default:
+      return `Base: $${fmt(m)}/mo (1x) • $${fmt(q)}/qtr (3x)`;
+  }
+}
+
 // Check if a transaction occurs on a specific day
 export function isTransactionOccurring(day: Date, transaction: RecurringTransaction): boolean {
   const tStart = parseDateLocal(transaction.startDate);
@@ -110,7 +589,7 @@ export function isTransactionOccurring(day: Date, transaction: RecurringTransact
     
     case 'semimonthly': {
       const dom = dTrunc.getDate();
-      const days = transaction.semiMonthlyDays || [1, 15];
+      const days = (transaction.semiMonthlyDays && transaction.semiMonthlyDays.length > 0) ? transaction.semiMonthlyDays : [1, 15];
       return days.includes(dom);
     }
     
@@ -323,14 +802,35 @@ export const SAMPLE_TRANSACTIONS: RecurringTransaction[] = [
   },
   {
     id: "t4",
-    title: "Reserve Card Minimum Payment",
-    amount: 35,
+    title: "Sapphire Reserve Credit Card",
+    amount: 150,
     startDate: "2026-07-20",
     frequency: "monthly",
     category: "liability",
     fundingAccountId: "acc_checking",
     targetAccountId: "acc_credit",
-    notes: "Minimum payment for credit account.",
+    liabilityType: "credit_card",
+    currentBalance: 4200,
+    startingBalance: 6000,
+    creditLimit: 10000,
+    interestRate: 22.99,
+    minimumPayment: 85,
+    notes: "High interest rewards credit card balance.",
+  },
+  {
+    id: "t5",
+    title: "Auto Loan Installment",
+    amount: 380,
+    startDate: "2026-07-12",
+    frequency: "monthly",
+    category: "liability",
+    fundingAccountId: "acc_checking",
+    liabilityType: "auto_loan",
+    currentBalance: 8500,
+    startingBalance: 18000,
+    interestRate: 5.49,
+    minimumPayment: 380,
+    notes: "Fixed rate 5-year vehicle financing.",
   }
 ];
 
