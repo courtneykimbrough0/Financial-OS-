@@ -1,8 +1,16 @@
 // Data model and helpers for recurring transactions and forecasting
 import { getDaysInRange } from "@/lib/utils";
 
-export type TransactionCategory = 'income' | 'fixed-expense' | 'subscription' | 'liability' | 'savings';
-export type TransactionFrequency = 'daily' | 'weekly' | 'biweekly' | 'semimonthly' | 'monthly' | 'quarterly' | 'yearly';
+export type TransactionCategory = 'income' | 'fixed-expense' | 'subscription' | 'liability' | 'savings' | 'transfer';
+export type TransactionFrequency = 'daily' | 'weekly' | 'biweekly' | 'semimonthly' | 'monthly' | 'quarterly' | 'yearly' | 'onetime';
+
+export interface TransactionOverride {
+  id: string;
+  transactionId: string;
+  dateStr: string;
+  status: 'verified' | 'skipped' | 'modified';
+  customAmount?: number;
+}
 
 export interface Account {
   id: string;
@@ -10,6 +18,7 @@ export interface Account {
   type: 'checking' | 'savings' | 'credit-card' | 'other';
   customType?: string; // Must be filled if type is 'other'
   balance: number; // For cash accounts, current cash. For credit cards, outstanding balance (amount owed).
+  startDate?: string; // Starting date (YYYY-MM-DD) when the starting balance becomes active
 }
 
 export interface RecurringTransaction {
@@ -17,6 +26,7 @@ export interface RecurringTransaction {
   title: string;
   amount: number;
   startDate: string; // YYYY-MM-DD
+  endDate?: string; // Optional stopping date YYYY-MM-DD
   frequency: TransactionFrequency;
   category: TransactionCategory;
   semiMonthlyDays?: number[]; // e.g. [1, 15]
@@ -48,6 +58,8 @@ export interface ForecastDay {
   transactions: {
     item: RecurringTransaction;
     amount: number;
+    status?: 'verified' | 'skipped' | 'modified';
+    overrideId?: string;
   }[];
   accountBalances: Record<string, number>; // Individual account balances at the end of the day
 }
@@ -101,6 +113,8 @@ export function isYearlyMatch(day: Date, startDay: Date): boolean {
 export function getMonthlyEquivalent(t: { amount: number; frequency: TransactionFrequency; semiMonthlyDays?: number[] }): number {
   if (!t.amount || isNaN(t.amount)) return 0;
   switch (t.frequency) {
+    case 'onetime':
+      return 0; // One-time events are excluded from standard recurring monthly projections
     case 'daily':
       return t.amount * 30; // standard 30 days/mo baseline
     case 'weekly':
@@ -126,6 +140,8 @@ export function getMonthlyEquivalent(t: { amount: number; frequency: Transaction
 export function getQuarterlyEquivalent(t: { amount: number; frequency: TransactionFrequency; semiMonthlyDays?: number[] }): number {
   if (!t.amount || isNaN(t.amount)) return 0;
   switch (t.frequency) {
+    case 'onetime':
+      return 0; // One-time events are excluded from standard recurring quarterly projections
     case 'daily':
       return t.amount * 90; // 90 days/quarter
     case 'weekly':
@@ -151,6 +167,8 @@ export function getQuarterlyEquivalent(t: { amount: number; frequency: Transacti
 export function getYearlyEquivalent(t: { amount: number; frequency: TransactionFrequency; semiMonthlyDays?: number[] }): number {
   if (!t.amount || isNaN(t.amount)) return 0;
   switch (t.frequency) {
+    case 'onetime':
+      return 0; // One-time events are excluded from standard recurring yearly projections
     case 'daily':
       return t.amount * 365;
     case 'weekly':
@@ -321,18 +339,18 @@ export function calculatePayoffDetails(
 export interface PayoffStrategyResult {
   strategy: 'avalanche' | 'snowball' | 'minimums';
   totalMonths: number | null;
-  debtFreeDateStr: string;
+  fullyPaidDateStr: string;
   totalInterestPaid: number;
   totalPrincipalPaid: number;
   totalPaid: number;
-  debtPayoffOrder: {
+  liabilityPayoffOrder: {
     id: string;
     title: string;
     startingBalance: number;
     apr: number;
     eliminatedMonth: number;
     eliminatedDateStr: string;
-    totalInterestForThisDebt: number;
+    totalInterestForThisLiability: number;
   }[];
   payoffOrder: {
     id: string;
@@ -351,7 +369,7 @@ export interface PayoffStrategyResult {
   }[];
 }
 
-export function simulateDebtPayoff(
+export function simulateLiabilityPayoff(
   liabilities: RecurringTransaction[],
   extraMonthlyBudgetOrStrategy: number | 'avalanche' | 'snowball' | 'minimums' = 0,
   strategyOrBudget: 'avalanche' | 'snowball' | 'minimums' | number = 'avalanche'
@@ -392,11 +410,11 @@ export function simulateDebtPayoff(
     return {
       strategy,
       totalMonths: 0,
-      debtFreeDateStr: "Debt-Free!",
+      fullyPaidDateStr: "Fully Paid!",
       totalInterestPaid: 0,
       totalPrincipalPaid: 0,
       totalPaid: 0,
-      debtPayoffOrder: [],
+      liabilityPayoffOrder: [],
       payoffOrder: [],
       monthlySnapshots: [],
     };
@@ -406,7 +424,7 @@ export function simulateDebtPayoff(
   let totalInterestCumulative = 0;
   let totalPaidCumulative = 0;
   const snapshots: PayoffStrategyResult['monthlySnapshots'] = [];
-  const payoffOrder: PayoffStrategyResult['debtPayoffOrder'] = [];
+  const payoffOrder: PayoffStrategyResult['liabilityPayoffOrder'] = [];
   const simplePayoffOrder: PayoffStrategyResult['payoffOrder'] = [];
 
   const now = new Date();
@@ -447,7 +465,7 @@ export function simulateDebtPayoff(
               apr: debt.apr,
               eliminatedMonth: currentMonth,
               eliminatedDateStr: monthDateStr,
-              totalInterestForThisDebt: Math.round(debt.totalInterestForThisDebt),
+              totalInterestForThisLiability: Math.round(debt.totalInterestForThisDebt),
             });
             simplePayoffOrder.push({
               id: debt.id,
@@ -497,7 +515,7 @@ export function simulateDebtPayoff(
               apr: targetDebt.apr,
               eliminatedMonth: currentMonth,
               eliminatedDateStr: monthDateStr,
-              totalInterestForThisDebt: Math.round(targetDebt.totalInterestForThisDebt),
+              totalInterestForThisLiability: Math.round(targetDebt.totalInterestForThisDebt),
             });
             simplePayoffOrder.push({
               id: targetDebt.id,
@@ -524,16 +542,16 @@ export function simulateDebtPayoff(
   }
 
   const finalDate = new Date(now.getFullYear(), now.getMonth() + currentMonth, 1);
-  const debtFreeDateStr = finalDate.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  const fullyPaidDateStr = finalDate.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 
   return {
     strategy,
     totalMonths: currentMonth,
-    debtFreeDateStr,
+    fullyPaidDateStr,
     totalInterestPaid: Math.round(totalInterestCumulative),
     totalPrincipalPaid: Math.round(initialTotalBalance),
     totalPaid: Math.round(totalPaidCumulative),
-    debtPayoffOrder: payoffOrder,
+    liabilityPayoffOrder: payoffOrder,
     payoffOrder: simplePayoffOrder,
     monthlySnapshots: snapshots,
   };
@@ -573,8 +591,17 @@ export function isTransactionOccurring(day: Date, transaction: RecurringTransact
   const sTrunc = new Date(tStart.getFullYear(), tStart.getMonth(), tStart.getDate());
   
   if (dTrunc < sTrunc) return false; // Haven't started yet
+
+  if (transaction.endDate) {
+    const tEnd = parseDateLocal(transaction.endDate);
+    const eTrunc = new Date(tEnd.getFullYear(), tEnd.getMonth(), tEnd.getDate());
+    if (dTrunc > eTrunc) return false; // Already finished/stopped
+  }
   
   switch (transaction.frequency) {
+    case 'onetime':
+      return dTrunc.getTime() === sTrunc.getTime();
+      
     case 'daily':
       return true;
       
@@ -614,12 +641,14 @@ export function generateForecast({
   initialBalance = 0,
   accounts = [],
   transactions,
+  overrides = [],
 }: {
   startDate: Date;
   numberOfDays: number;
   initialBalance?: number;
   accounts?: Account[];
   transactions: RecurringTransaction[];
+  overrides?: TransactionOverride[];
 }): ForecastDay[] {
   const forecast: ForecastDay[] = [];
   
@@ -638,8 +667,14 @@ export function generateForecast({
 
   // Clone current account balances to simulate their progression
   const currentBalances: Record<string, number> = {};
+  const initializedAccounts = new Set<string>();
   for (const acc of activeAccounts) {
-    currentBalances[acc.id] = acc.balance;
+    if (acc.startDate) {
+      currentBalances[acc.id] = 0;
+    } else {
+      currentBalances[acc.id] = acc.balance;
+      initializedAccounts.add(acc.id);
+    }
   }
   
   const end = new Date(startDate);
@@ -650,18 +685,48 @@ export function generateForecast({
   for (const day of days) {
     let incoming = 0;
     let outgoing = 0;
-    const dayTransactions: { item: RecurringTransaction; amount: number }[] = [];
+    const dayTransactions: {
+      item: RecurringTransaction;
+      amount: number;
+      status?: 'verified' | 'skipped' | 'modified';
+      overrideId?: string;
+    }[] = [];
+    
+    const dayStr = formatDateLocal(day);
+
+    // Activate any account starting on or before today
+    for (const acc of activeAccounts) {
+      if (acc.startDate && !initializedAccounts.has(acc.id) && dayStr >= acc.startDate) {
+        currentBalances[acc.id] = acc.balance;
+        initializedAccounts.add(acc.id);
+      }
+    }
     
     // Store starting balances for this day
     const dayStartingBalances = { ...currentBalances };
     
     for (const t of transactions) {
       if (isTransactionOccurring(day, t)) {
-        const amt = t.amount;
+        // Look up if there is an override for this transaction on this day
+        const override = overrides.find(o => o.transactionId === t.id && o.dateStr === dayStr);
+        
+        if (override && override.status === 'skipped') {
+          continue; // Skip this transaction instance completely on this day
+        }
+        
+        let amt = t.amount;
+        if (override && override.status === 'modified' && override.customAmount !== undefined) {
+          amt = override.customAmount;
+        }
         
         if (t.category === 'income') {
           incoming += amt;
-          dayTransactions.push({ item: t, amount: amt });
+          dayTransactions.push({
+            item: t,
+            amount: amt,
+            status: override ? override.status : undefined,
+            overrideId: override ? override.id : undefined,
+          });
           
           // Deposit into connected account
           const accId = t.accountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
@@ -670,7 +735,12 @@ export function generateForecast({
           }
         } else {
           outgoing += amt;
-          dayTransactions.push({ item: t, amount: -amt });
+          dayTransactions.push({
+            item: t,
+            amount: -amt,
+            status: override ? override.status : undefined,
+            overrideId: override ? override.id : undefined,
+          });
           
           if (t.category === 'liability') {
             const targetAccId = t.targetAccountId;
@@ -686,6 +756,16 @@ export function generateForecast({
             }
           } else if (t.category === 'savings') {
             // Transfer from checking to savings
+            const fundAccId = t.fundingAccountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
+            if (fundAccId && currentBalances[fundAccId] !== undefined) {
+              currentBalances[fundAccId] -= amt;
+            }
+            const targetAccId = t.targetAccountId || (activeAccounts.find(a => a.type === 'savings')?.id);
+            if (targetAccId && currentBalances[targetAccId] !== undefined) {
+              currentBalances[targetAccId] += amt;
+            }
+          } else if (t.category === 'transfer') {
+            // General transfer between accounts
             const fundAccId = t.fundingAccountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
             if (fundAccId && currentBalances[fundAccId] !== undefined) {
               currentBalances[fundAccId] -= amt;
