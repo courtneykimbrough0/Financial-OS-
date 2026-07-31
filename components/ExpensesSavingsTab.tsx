@@ -255,7 +255,7 @@ export const ExpensesSavingsTab: React.FC = () => {
                       </div>
                       <div className="text-right">
                         <span className="text-base font-mono font-bold text-cyan-400 block">
-                          +$
+                          -$
                           {tx.amount.toLocaleString("en-US", {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
