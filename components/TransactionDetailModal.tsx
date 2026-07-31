@@ -134,10 +134,10 @@ export const TransactionDetailModal: React.FC = () => {
                 </span>
                 <div
                   className={`text-xl font-mono font-bold mt-0.5 ${
-                    isInc || isSav ? "text-emerald-400" : "text-zinc-200"
+                    isInc ? "text-emerald-400" : "text-zinc-200"
                   }`}
                 >
-                  {isInc || isSav ? "+" : "-"}${tx.amount.toLocaleString("en-US")}
+                  {isInc ? "+" : "-"}${tx.amount.toLocaleString("en-US")}
                 </div>
               </div>
               <div className="text-right">
