@@ -611,7 +611,7 @@ export const Dashboard: React.FC = () => {
           {/* TRADITIONAL MONTH GRID VIEW */}
           {forecastRange === "month" && (
             <div className="flex flex-col gap-1.5 mt-2 overflow-x-auto">
-              <div className="grid grid-cols-7 gap-1.5 text-center min-w-[600px]">
+              <div className="grid grid-cols-7 gap-1.5 text-center">
                 {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map((day) => (
                   <div
                     key={day}
@@ -622,7 +622,7 @@ export const Dashboard: React.FC = () => {
                 ))}
               </div>
 
-              <div className="grid grid-cols-7 gap-1 sm:gap-1.5 min-w-[600px]">
+              <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
                 {calendarCells.map((cell, idx) => {
                   if (cell.isPadding || !cell.date) {
                     return (
