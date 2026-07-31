@@ -40,13 +40,19 @@ versioned, diffable, and line up with the PR review tools already in use.
 Set these in Vercel (Project Settings → Environment Variables) and in a
 local `.env.local` for development — never commit either:
 
-- `NEXT_PUBLIC_SUPABASE_URL` — from Supabase Project Settings → API.
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — from the same page ("anon public" key).
+- `NEXT_PUBLIC_SUPABASE_URL` — from Supabase Project Settings → API Keys.
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — from the same page, the
+  "Publishable key" (`sb_publishable_...`). This replaced the older "anon
+  public" key naming — Supabase now shows Publishable/Secret keys by
+  default, with the legacy anon/service_role keys under a "Legacy keys"
+  tab. Either generation works the same way; use whichever your project
+  shows as the primary key.
 
-Do not use the Supabase `service_role` key anywhere in this app — every
-table is protected by Row Level Security scoped to `auth.uid()`, so the
-anon key is sufficient and safe to expose to the browser. The service role
-key bypasses RLS entirely and has no legitimate use here.
+Do not use the Supabase Secret key (`sb_secret_...`, formerly called
+`service_role`) anywhere in this app — every table is protected by Row
+Level Security scoped to `auth.uid()`, so the Publishable key is
+sufficient and safe to expose to the browser. The Secret key bypasses RLS
+entirely and has no legitimate use here.
 
 ## Package manager
 

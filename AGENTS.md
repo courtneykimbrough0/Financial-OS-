@@ -34,7 +34,7 @@ The app has no backend yet in most respects: data lives in browser `localStorage
 
 ## Hard rules
 
-- **Never use the Supabase `service_role` key anywhere in this app** — not in env files, not for convenience, not even in a script. Every table's RLS policy is scoped to `auth.uid() = user_id`, and the anon public key is sufficient and safe to expose to the browser. If a task seems to need the service role key, stop and flag it rather than using it.
+- **Never use the Supabase Secret key anywhere in this app** (Supabase's newer naming for what used to be called the `service_role` key — legacy `anon`/`service_role` keys and the new Publishable/Secret keys are interchangeable pairs, see https://supabase.com/docs/guides/getting-started/api-keys). Not in env files, not for convenience, not even in a script. Every table's RLS policy is scoped to `auth.uid() = user_id`, and the Publishable key (`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) is sufficient and safe to expose to the browser. If a task seems to need the Secret key, stop and flag it rather than using it.
 - **Never commit `.env*` files** (only `.env.example`, which itself should contain no real values). `.gitignore` already excludes them — don't work around that.
 - **Never embed credentials in a git remote URL** (`https://user:TOKEN@github.com/...`). Use a credential helper (e.g. `git config --global credential.helper osxkeychain` on macOS) so tokens are never printed by `git remote -v` or similar commands, and never paste a raw token into chat, logs, or command output.
 - **Don't merge your own PRs.** Open the PR, then wait for review — either from a human or from another agent acting as reviewer.
