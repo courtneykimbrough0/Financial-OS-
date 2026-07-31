@@ -44,6 +44,7 @@ import {
   Check,
   Edit3,
 } from "lucide-react";
+import { z } from "zod";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -60,18 +61,12 @@ import {
   TransactionOverride,
   ForecastDay,
   generateForecast,
-  DEFAULT_TRANSACTIONS,
   SAMPLE_TRANSACTIONS,
   formatDateLocal,
   parseDateLocal,
   getMonthlyEquivalent,
   getQuarterlyEquivalent,
-  getYearlyEquivalent,
   getFrequencySubtext,
-  getOccurrencesInMonth,
-  getOccurrencesInQuarter,
-  getActualMonthlyTotal,
-  getActualQuarterlyTotal,
   calculatePayoffDetails,
   simulateLiabilityPayoff,
   Account,
@@ -94,6 +89,56 @@ function getMondayOfWeek(d: Date): Date {
   result.setDate(diff);
   return result;
 }
+
+const accountImportSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.enum(["checking", "savings", "credit-card", "other"]),
+  customType: z.string().nullable().optional().transform(v => v ?? undefined),
+  balance: z.number(),
+  startDate: z.string().nullable().optional().transform(v => v ?? undefined),
+});
+
+const recurringTransactionImportSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  amount: z.number(),
+  startDate: z.string(),
+  frequency: z.enum(["daily", "weekly", "biweekly", "semimonthly", "monthly", "quarterly", "yearly", "onetime"]),
+  category: z.enum(["income", "fixed-expense", "subscription", "liability", "savings", "transfer"]),
+  semiMonthlyDays: z.array(z.number()).nullable().optional().transform(v => v ?? undefined),
+  notes: z.string().nullable().optional().transform(v => v ?? undefined),
+  accountId: z.string().nullable().optional().transform(v => v ?? undefined),
+  fundingAccountId: z.string().nullable().optional().transform(v => v ?? undefined),
+  targetAccountId: z.string().nullable().optional().transform(v => v ?? undefined),
+  liabilityType: z.enum([
+    "credit_card",
+    "revolving_loc",
+    "auto_loan",
+    "mortgage",
+    "personal_loan",
+    "student_loan",
+    "other",
+  ]).nullable().optional().transform(v => v ?? undefined),
+  interestRate: z.number().nullable().optional().transform(v => v ?? undefined),
+  currentBalance: z.number().nullable().optional().transform(v => v ?? undefined),
+  startingBalance: z.number().nullable().optional().transform(v => v ?? undefined),
+  creditLimit: z.number().nullable().optional().transform(v => v ?? undefined),
+  minimumPayment: z.number().nullable().optional().transform(v => v ?? undefined),
+  balanceTransferFee: z.number().nullable().optional().transform(v => v ?? undefined),
+  balanceTransferFeeMin: z.number().nullable().optional().transform(v => v ?? undefined),
+  promoRate: z.number().nullable().optional().transform(v => v ?? undefined),
+  promoEndDate: z.string().nullable().optional().transform(v => v ?? undefined),
+  minimumPaymentCalc: z.enum(["fixed", "percent_principal", "percent_principal_interest"]).nullable().optional().transform(v => v ?? undefined),
+  dayOfMonth: z.string().nullable().optional().transform(v => v ?? undefined),
+});
+
+const importDataSchema = z.object({
+  transactions: z.array(recurringTransactionImportSchema),
+  accounts: z.array(accountImportSchema).nullable().optional().transform(v => v ?? undefined),
+  launchDateStr: z.string().nullable().optional().transform(v => v ?? undefined),
+  initialBalance: z.number().nullable().optional().transform(v => v ?? undefined),
+});
 
 export default function Home() {
   const [mounted, setMounted] = useState<boolean>(false);
@@ -223,10 +268,6 @@ export default function Home() {
   const [wizHasCreditLimit, setWizHasCreditLimit] = useState<boolean>(false);
   const [wizCreditLimit, setWizCreditLimit] = useState<string>("");
 
-  // Stop/End dates for recurring transactions
-  const [formEndDate, setFormEndDate] = useState<string>("");
-  const [wizEndDate, setWizEndDate] = useState<string>("");
-
   // Day-specific transaction overrides (e.g. marking as paid, skipping, or modifying an instance)
   const [transactionOverrides, setTransactionOverrides] = useState<TransactionOverride[]>([]);
   const [overrideEditingTxId, setOverrideEditingTxId] = useState<string | null>(null);
@@ -319,7 +360,7 @@ export default function Home() {
           ]);
         }
 
-        const storedLaunch = localStorage.getItem("futureflow_launch_date");
+        const storedLaunch = localStorage.getItem("personal_forecast_launch_date");
         const activeLaunchStr = storedLaunch || todayStr;
         setLaunchDateStr(activeLaunchStr);
         setFormStartDate(activeLaunchStr);
@@ -1013,39 +1054,41 @@ export default function Home() {
       fileReader.onload = (event) => {
         try {
           const parsed = JSON.parse(event.target?.result as string);
-          if (parsed.transactions && Array.isArray(parsed.transactions)) {
-            const importedLaunchDate = parsed.launchDateStr || launchDateStr;
-            let importedAccounts: Account[] = [];
-            if (parsed.accounts && Array.isArray(parsed.accounts)) {
-              importedAccounts = parsed.accounts;
-            } else {
-              const legacyBalance =
-                typeof parsed.initialBalance === "number"
-                  ? parsed.initialBalance
-                  : initialBalance;
-              importedAccounts = [
-                {
-                  id: "acc_checking",
-                  name: "Primary Checking",
-                  type: "checking",
-                  balance: legacyBalance,
-                },
-              ];
-            }
-            setTransactions(parsed.transactions);
-            setAccounts(importedAccounts);
-            setLaunchDateStr(importedLaunchDate);
-            saveToStorage(
-              parsed.transactions,
-              importedLaunchDate,
-              importedAccounts,
-            );
-            setAlertMessage(
-              "Configuration, accounts, and transactions imported successfully!",
-            );
-          } else {
+          const validationResult = importDataSchema.safeParse(parsed);
+          if (!validationResult.success) {
             setAlertMessage("Invalid configuration structure.");
+            return;
           }
+          const validData = validationResult.data;
+          const importedLaunchDate = validData.launchDateStr || launchDateStr;
+          let importedAccounts: Account[] = [];
+          if (validData.accounts && validData.accounts.length > 0) {
+            importedAccounts = validData.accounts;
+          } else {
+            const legacyBalance =
+              typeof validData.initialBalance === "number"
+                ? validData.initialBalance
+                : initialBalance;
+            importedAccounts = [
+              {
+                id: "acc_checking",
+                name: "Primary Checking",
+                type: "checking",
+                balance: legacyBalance,
+              },
+            ];
+          }
+          setTransactions(validData.transactions);
+          setAccounts(importedAccounts);
+          setLaunchDateStr(importedLaunchDate);
+          saveToStorage(
+            validData.transactions,
+            importedLaunchDate,
+            importedAccounts,
+          );
+          setAlertMessage(
+            "Configuration, accounts, and transactions imported successfully!",
+          );
         } catch (err) {
           setAlertMessage("Error parsing JSON file.");
         }
@@ -1089,6 +1132,7 @@ export default function Home() {
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#070709] text-zinc-100 font-sans relative">
       {/* RESPONSIVE TOP NAVIGATION BAR (unified for both desktop and mobile) */}
+      {/* TODO(phase 1): replace with user_settings.onboarding_completed */}
       {accounts.length > 0 && (
         <header className="sticky top-0 z-30 w-full bg-zinc-950/85 backdrop-blur-md border-b border-white/5 shrink-0">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
@@ -1246,6 +1290,7 @@ export default function Home() {
 
       {/* MOBILE DRAWER MODAL MENU (< md) */}
       <AnimatePresence>
+        {/* TODO(phase 1): replace with user_settings.onboarding_completed */}
         {isMobileMenuOpen && accounts.length > 0 && (
           <div className="fixed inset-0 z-50 md:hidden flex flex-col">
             <motion.div
@@ -1434,8 +1479,10 @@ export default function Home() {
 
       {/* MAIN CONTENT REGION */}
       <main
+        // TODO(phase 1): replace with user_settings.onboarding_completed
         className={`flex-1 flex flex-col overflow-y-auto scrollbar-thin relative bg-[#070709] ${accounts.length === 0 ? "p-4 sm:p-6 md:p-8 items-center justify-center min-h-screen" : "p-4 sm:p-6 md:p-8 pb-24 md:pb-8"}`}
       >
+        {/* TODO(phase 1): replace with user_settings.onboarding_completed */}
         {accounts.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center w-full max-w-5xl mx-auto py-8">
             {/* Header / Brand for onboarding */}
