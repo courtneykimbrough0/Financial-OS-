@@ -44,7 +44,7 @@ export default function LoginPage() {
             <CalendarIcon className="w-6 h-6" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Welcome to Financial OS</h1>
-          <p className="text-sm text-zinc-400 mt-1.5">Cash engine, forecasting, and debt modeling</p>
+          <p className="text-sm text-zinc-400 mt-1.5">Cash engine, forecasting, and liability modeling</p>
         </div>
 
         {/* Login Card */}
