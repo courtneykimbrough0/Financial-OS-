@@ -26,7 +26,6 @@ export interface RecurringTransaction {
   title: string;
   amount: number;
   startDate: string; // YYYY-MM-DD
-  endDate?: string; // Optional stopping date YYYY-MM-DD
   frequency: TransactionFrequency;
   category: TransactionCategory;
   semiMonthlyDays?: number[]; // e.g. [1, 15]
@@ -591,12 +590,6 @@ export function isTransactionOccurring(day: Date, transaction: RecurringTransact
   const sTrunc = new Date(tStart.getFullYear(), tStart.getMonth(), tStart.getDate());
   
   if (dTrunc < sTrunc) return false; // Haven't started yet
-
-  if (transaction.endDate) {
-    const tEnd = parseDateLocal(transaction.endDate);
-    const eTrunc = new Date(tEnd.getFullYear(), tEnd.getMonth(), tEnd.getDate());
-    if (dTrunc > eTrunc) return false; // Already finished/stopped
-  }
   
   switch (transaction.frequency) {
     case 'onetime':
