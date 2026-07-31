@@ -1,6 +1,0 @@
-{
-  "name": "Financial OS",
-  "description": "A financial forecasting tool for managing and predicting recurring income, expenses, liabilities, and savings.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
