@@ -43,8 +43,10 @@ import {
   BarChart3,
   Check,
   Edit3,
+  LogOut,
 } from "lucide-react";
 import { z } from "zod";
+import { createClient } from "@/utils/supabase/client";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -156,6 +158,12 @@ export default function Home() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<RecurringTransaction[]>([]);
   const [launchDateStr, setLaunchDateStr] = useState<string>("2026-07-28");
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.reload();
+  };
 
   // Custom non-blocking confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -1268,6 +1276,17 @@ export default function Home() {
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Sample</span>
+                </button>
+
+                <div className="w-px h-5 bg-white/10 mx-1"></div>
+
+                <button
+                  onClick={handleSignOut}
+                  title="Sign Out"
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-white/5 text-rose-400 hover:text-rose-300 text-xs font-medium font-mono transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
                 </button>
               </div>
 
