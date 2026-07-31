@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+
 import { AnimatePresence } from "motion/react";
 import {
   Calendar as CalendarIcon,
@@ -33,7 +34,7 @@ const BOTTOM_TABS = [
   { id: "accounts",  label: "Accounts",  Icon: Wallet,       color: "text-indigo-400" },
   { id: "income",    label: "Income",    Icon: Coins,        color: "text-emerald-400" },
   { id: "expenses",  label: "Expenses",  Icon: TrendingDown, color: "text-sky-400" },
-  { id: "liabilities", label: "Debts",  Icon: Clock,        color: "text-amber-400" },
+  { id: "liabilities", label: "Liabilities", Icon: Clock,   color: "text-amber-400" },
 ] as const;
 
 function MainAppLayout() {
@@ -70,8 +71,8 @@ function MainAppLayout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           {/* Logo & branding */}
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-900 border border-white/10 shadow-sm overflow-hidden shrink-0">
-              <img src="/logo.png" alt="FinOS Logo" className="w-full h-full object-cover" />
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-900 border border-white/10 shadow-sm text-indigo-400 shrink-0">
+              <CalendarIcon className="w-5 h-5" />
             </div>
             <div>
               <h1 className="text-sm font-bold text-white tracking-tight leading-none">Financial OS</h1>
