@@ -1,15 +1,14 @@
 "use client";
 
 import React from "react";
-import { AnimatePresence, motion } from "motion/react";
+
+import { AnimatePresence } from "motion/react";
 import {
   Calendar as CalendarIcon,
   Coins,
   Clock,
   TrendingDown,
   Wallet,
-  X,
-  Menu,
   LogOut,
 } from "lucide-react";
 
@@ -30,6 +29,14 @@ import { PayoffPlannerModal } from "@/components/PayoffPlannerModal";
 import DayDetailModal from "@/components/DayDetailModal";
 import TransactionFormModal from "@/components/TransactionFormModal";
 
+const BOTTOM_TABS = [
+  { id: "dashboard", label: "Dashboard", Icon: CalendarIcon, color: "text-indigo-400" },
+  { id: "accounts",  label: "Accounts",  Icon: Wallet,       color: "text-indigo-400" },
+  { id: "income",    label: "Income",    Icon: Coins,        color: "text-emerald-400" },
+  { id: "expenses",  label: "Expenses",  Icon: TrendingDown, color: "text-sky-400" },
+  { id: "liabilities", label: "Liabilities", Icon: Clock,   color: "text-amber-400" },
+] as const;
+
 function MainAppLayout() {
   const {
     loading,
@@ -37,11 +44,8 @@ function MainAppLayout() {
     accounts,
     activeTab,
     setActiveTab,
-    expenseSubTab,
     setExpenseSubTab,
     categorizedTransactions,
-    isMobileMenuOpen,
-    setIsMobileMenuOpen,
     signOut,
   } = useFinancialData();
 
@@ -150,180 +154,25 @@ function MainAppLayout() {
             </button>
           </nav>
 
-          {/* Right Desktop Actions & Hamburger menu for mobile */}
-          <div className="flex items-center gap-2.5">
-            {/* Desktop Actions */}
-            <div className="hidden md:flex items-center gap-2">
-              <button
-                onClick={signOut}
-                title="Sign Out"
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-white/5 text-rose-400 hover:text-rose-300 text-xs font-medium font-mono transition-colors cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Sign Out</span>
-              </button>
-            </div>
-
-            {/* Mobile Menu Button */}
+          {/* Right Actions — Sign Out icon-only (visible on all breakpoints) */}
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2.5 rounded-xl bg-zinc-900 border border-white/10 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-              aria-label="Toggle navigation menu"
+              onClick={signOut}
+              title="Sign Out"
+              aria-label="Sign Out"
+              className="flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-white/5 text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
             >
-              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
       </header>
 
-      {/* MOBILE DRAWER MODAL MENU */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <div className="fixed inset-0 z-50 md:hidden flex flex-col">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ y: "-100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "-100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 250 }}
-              className="relative w-full bg-zinc-950 border-b border-white/15 shadow-2xl p-5 flex flex-col gap-5 z-10 max-h-[85vh] overflow-y-auto"
-            >
-              <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-900 border border-white/15 text-indigo-400">
-                    <CalendarIcon className="w-4.5 h-4.5" />
-                  </div>
-                  <span className="text-base font-bold text-white">Financial OS Menu</span>
-                </div>
-                <button
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="p-2 rounded-xl bg-zinc-900 text-zinc-300 hover:text-white cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Navigation Tabs List */}
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-mono font-bold tracking-widest text-zinc-500 uppercase px-1">
-                  Navigation
-                </span>
-                <button
-                  onClick={() => {
-                    setActiveTab("dashboard");
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl text-left transition-all cursor-pointer ${
-                    activeTab === "dashboard"
-                      ? "bg-indigo-600/25 border border-indigo-500/40 text-white font-bold"
-                      : "bg-zinc-900/60 text-zinc-200 hover:text-white"
-                  }`}
-                >
-                  <CalendarIcon className="w-4.5 h-4.5 text-indigo-400" />
-                  <span className="text-sm font-medium">Dashboard</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTab("accounts");
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl text-left transition-all cursor-pointer ${
-                    activeTab === "accounts"
-                      ? "bg-indigo-600/25 border border-indigo-500/40 text-white font-bold"
-                      : "bg-zinc-900/60 text-zinc-200 hover:text-white"
-                  }`}
-                >
-                  <Wallet className="w-4.5 h-4.5 text-indigo-400" />
-                  <span className="text-sm font-medium">Accounts ({accounts.length})</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTab("income");
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl text-left transition-all cursor-pointer ${
-                    activeTab === "income"
-                      ? "bg-emerald-600/25 border border-emerald-500/40 text-white font-bold"
-                      : "bg-zinc-900/60 text-zinc-200 hover:text-white"
-                  }`}
-                >
-                  <Coins className="w-4.5 h-4.5 text-emerald-400" />
-                  <span className="text-sm font-medium">
-                    Income ({categorizedTransactions.income.length})
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTab("expenses");
-                    setExpenseSubTab("all");
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl text-left transition-all cursor-pointer ${
-                    activeTab === "expenses"
-                      ? "bg-sky-600/25 border border-sky-500/40 text-white font-bold"
-                      : "bg-zinc-900/60 text-zinc-200 hover:text-white"
-                  }`}
-                >
-                  <TrendingDown className="w-4.5 h-4.5 text-sky-400" />
-                  <span className="text-sm font-medium">
-                    Expenses & Savings (
-                    {categorizedTransactions.fixedExpenses.length +
-                      categorizedTransactions.subscriptions.length +
-                      categorizedTransactions.savings.length}
-                    )
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTab("liabilities");
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl text-left transition-all cursor-pointer ${
-                    activeTab === "liabilities"
-                      ? "bg-amber-600/25 border border-amber-500/40 text-white font-bold"
-                      : "bg-zinc-900/60 text-zinc-200 hover:text-white"
-                  }`}
-                >
-                  <Clock className="w-4.5 h-4.5 text-amber-400" />
-                  <span className="text-sm font-medium">
-                    Liabilities ({categorizedTransactions.liabilities.length})
-                  </span>
-                </button>
-              </div>
-
-              {/* Data Tools */}
-              <div className="pt-3 border-t border-white/10 flex flex-col gap-2">
-                <span className="text-xs font-mono font-bold tracking-widest text-zinc-500 uppercase px-1">
-                  Session
-                </span>
-                <button
-                  onClick={() => {
-                    signOut();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="flex items-center justify-center gap-2 p-3 rounded-xl bg-zinc-900 border border-white/10 text-rose-400 text-xs font-mono font-semibold cursor-pointer"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Sign Out</span>
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MAIN CONTENT REGION */}
-      <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 select-none">
+      {/* MAIN CONTENT REGION
+          pb-[calc(4rem+env(safe-area-inset-bottom))] ensures content isn't hidden
+          behind the fixed bottom tab bar on mobile.
+          On md+ screens the bar is hidden so we only need standard padding. */}
+      <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-8 select-none">
         <AnimatePresence mode="wait">
           {activeTab === "dashboard" && <Dashboard />}
           {activeTab === "accounts" && <AccountsTab />}
@@ -332,6 +181,43 @@ function MainAppLayout() {
           {activeTab === "liabilities" && <LiabilitiesTab />}
         </AnimatePresence>
       </main>
+
+      {/* FIXED BOTTOM TAB BAR — mobile only (hidden on md+) */}
+      <nav
+        aria-label="Bottom navigation"
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-zinc-950/90 backdrop-blur-md border-t border-white/10"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="flex items-stretch h-16">
+          {BOTTOM_TABS.map(({ id, label, Icon, color }) => {
+            const isActive = activeTab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => {
+                  setActiveTab(id);
+                  if (id === "expenses") setExpenseSubTab("all");
+                }}
+                aria-label={label}
+                aria-current={isActive ? "page" : undefined}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
+                  isActive ? "text-white" : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                <Icon
+                  className={`w-5 h-5 transition-colors ${isActive ? color : ""}`}
+                />
+                <span className={`text-[10px] font-semibold leading-none tracking-tight ${isActive ? "text-white" : ""}`}>
+                  {label}
+                </span>
+                {isActive && (
+                  <span className={`absolute bottom-[env(safe-area-inset-bottom)] w-8 h-0.5 rounded-full ${color.replace("text-", "bg-")}`} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       {/* MODALS & OVERLAYS REGION */}
       <AnimatePresence>
