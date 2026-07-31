@@ -229,7 +229,9 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // Auth Initialization & DB Sync
   useEffect(() => {
-    setMounted(true);
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
     let active = true;
 
     async function initAuth() {
@@ -289,6 +291,7 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     return () => {
       active = false;
+      clearTimeout(timer);
     };
   }, [supabase]);
 
