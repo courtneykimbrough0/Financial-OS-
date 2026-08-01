@@ -62,7 +62,7 @@ create table if not exists public.transactions (
 
   -- liability-only fields
   liability_type text check (
-    liability_type in ('credit_card', 'revolving_loc', 'auto_loan', 'mortgage', 'personal_loan', 'student_loan', 'other')
+    liability_type in ('card', 'loan', 'line_of_credit', 'one_time')
   ),
   interest_rate numeric,
   current_balance numeric,

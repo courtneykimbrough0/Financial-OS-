@@ -50,7 +50,7 @@ export const TransactionFormModal: React.FC = () => {
   const [formTargetAccountId, setFormTargetAccountId] = useState<string>("");
 
   // Liability-specific inputs local state
-  const [formLiabilityType, setFormLiabilityType] = useState<string>("credit_card");
+  const [formLiabilityType, setFormLiabilityType] = useState<string>("card");
   const [formInterestRate, setFormInterestRate] = useState<string>("");
   const [formCurrentBalance, setFormCurrentBalance] = useState<string>("");
   const [formStartingBalance, setFormStartingBalance] = useState<string>("");
@@ -81,7 +81,7 @@ export const TransactionFormModal: React.FC = () => {
           setFormAccountId(tx.accountId || "");
           setFormFundingAccountId(tx.fundingAccountId || "");
           setFormTargetAccountId(tx.targetAccountId || "");
-          setFormLiabilityType(tx.liabilityType || "credit_card");
+          setFormLiabilityType(tx.liabilityType || "card");
           setFormInterestRate(tx.interestRate !== undefined ? String(tx.interestRate) : "");
           setFormCurrentBalance(tx.currentBalance !== undefined ? String(tx.currentBalance) : "");
           setFormStartingBalance(tx.startingBalance !== undefined ? String(tx.startingBalance) : "");
@@ -111,7 +111,7 @@ export const TransactionFormModal: React.FC = () => {
         setFormAccountId("");
         setFormFundingAccountId("");
         setFormTargetAccountId("");
-        setFormLiabilityType("credit_card");
+        setFormLiabilityType("card");
         setFormInterestRate("");
         setFormCurrentBalance("");
         setFormStartingBalance("");
@@ -1025,13 +1025,10 @@ export const TransactionFormModal: React.FC = () => {
                         onChange={(e) => setFormLiabilityType(e.target.value)}
                         className="block w-full px-3.5 py-2.5 text-xs bg-zinc-950 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 transition-colors cursor-pointer font-medium"
                       >
-                        <option value="credit_card">Credit Card</option>
-                        <option value="personal_loan">Personal Loan</option>
-                        <option value="auto_loan">Auto Loan</option>
-                        <option value="mortgage">Home Mortgage</option>
-                        <option value="revolving_loc">Personal Line of Credit</option>
-                        <option value="student_loan">Student Loan</option>
-                        <option value="other">Other Contract / Lease</option>
+                        <option value="card">Card</option>
+                        <option value="loan">Loan</option>
+                        <option value="line_of_credit">Line of Credit</option>
+                        <option value="one_time">One Time</option>
                       </select>
                     </div>
 
@@ -1565,7 +1562,15 @@ export const TransactionFormModal: React.FC = () => {
                             <div className="font-bold text-zinc-100 text-sm border-b border-white/5 pb-2 flex justify-between items-center">
                               <span>{formTitle || "Liability Summary"}</span>
                               <span className="text-[10px] font-mono font-normal uppercase px-2 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-md">
-                                {formLiabilityType.replace("_", " ")}
+                                {formLiabilityType === "card"
+                                  ? "Card"
+                                  : formLiabilityType === "loan"
+                                  ? "Loan"
+                                  : formLiabilityType === "line_of_credit"
+                                  ? "Line of Credit"
+                                  : formLiabilityType === "one_time"
+                                  ? "One Time"
+                                  : formLiabilityType}
                               </span>
                             </div>
 
