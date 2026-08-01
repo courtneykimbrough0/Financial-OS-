@@ -426,7 +426,6 @@ export const TransactionFormModal: React.FC = () => {
                       >
                         <option value="">Select Asset Account (Default checking)</option>
                         {accounts
-                          .filter((a) => a.type !== "credit-card")
                           .map((acc) => (
                             <option key={acc.id} value={acc.id}>
                               {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
@@ -778,7 +777,6 @@ export const TransactionFormModal: React.FC = () => {
                           >
                             <option value="">Select Account (Default checking)</option>
                             {accounts
-                              .filter((a) => a.type !== "credit-card")
                               .map((acc) => (
                                 <option key={acc.id} value={acc.id}>
                                   {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
@@ -799,7 +797,6 @@ export const TransactionFormModal: React.FC = () => {
                           >
                             <option value="">Select Account (Default savings)</option>
                             {accounts
-                              .filter((a) => a.type !== "credit-card")
                               .map((acc) => (
                                 <option key={acc.id} value={acc.id}>
                                   {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
@@ -822,13 +819,7 @@ export const TransactionFormModal: React.FC = () => {
                           <option value="">Select Account (Default checking)</option>
                           {accounts.map((acc) => (
                             <option key={acc.id} value={acc.id}>
-                              {acc.name} (
-                              {acc.type === "credit-card"
-                                ? "Credit Card"
-                                : acc.type === "other"
-                                ? acc.customType || "Other"
-                                : acc.type}
-                              )
+                              {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
                             </option>
                           ))}
                         </select>
@@ -1494,7 +1485,6 @@ export const TransactionFormModal: React.FC = () => {
                         >
                           <option value="">Select Account (Default checking)</option>
                           {accounts
-                            .filter((a) => a.type !== "credit-card")
                             .map((acc) => (
                               <option key={acc.id} value={acc.id}>
                                 {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
