@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Coins,
@@ -11,12 +11,16 @@ import {
   CheckCircle2,
   Calendar as CalendarIcon,
   AlertTriangle,
+  Scissors,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { useFinancialData } from "./FinancialOSContext";
 import {
   calculatePayoffDetails,
   getFrequencySubtext,
   RecurringTransaction,
+  formatDateLocal,
 } from "@/lib/forecast";
 
 export const TransactionDetailModal: React.FC = () => {
@@ -30,7 +34,18 @@ export const TransactionDetailModal: React.FC = () => {
     setConfirmDialog,
     deleteTransactionById,
     setSelectedDay,
+    selectedDay,
+    createSplitPayment,
+    setAlertMessage,
   } = useFinancialData();
+
+  const [splitFormOpen, setSplitFormOpen] = useState(false);
+  const [splitDueDate, setSplitDueDate] = useState("");
+  const [splitParts, setSplitParts] = useState<{ dateStr: string; amount: string }[]>([
+    { dateStr: "", amount: "" },
+    { dateStr: "", amount: "" },
+  ]);
+  const [splitSaving, setSplitSaving] = useState(false);
 
   if (!selectedDetailTransaction) return null;
 
@@ -68,6 +83,36 @@ export const TransactionDetailModal: React.FC = () => {
       },
     });
     setSelectedDetailTransaction(null);
+  };
+
+  const openSplitForm = () => {
+    const defaultDate = selectedDay?.dateStr || formatDateLocal(new Date());
+    setSplitDueDate(defaultDate);
+    setSplitParts([
+      { dateStr: defaultDate, amount: "" },
+      { dateStr: "", amount: "" },
+    ]);
+    setSplitFormOpen(true);
+  };
+
+  const splitTotal = splitParts.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+  const splitRemainder = Math.round((tx.amount - splitTotal) * 100) / 100;
+  const splitValid =
+    splitDueDate !== "" &&
+    splitParts.length >= 2 &&
+    splitParts.every((p) => p.dateStr !== "" && parseFloat(p.amount) > 0) &&
+    Math.abs(splitRemainder) < 0.01;
+
+  const handleSplitSave = async () => {
+    if (!splitValid) return;
+    setSplitSaving(true);
+    const parts = splitParts.map((p) => ({ dateStr: p.dateStr, amount: parseFloat(p.amount) }));
+    const ok = await createSplitPayment(tx.id, splitDueDate, parts);
+    setSplitSaving(false);
+    if (ok) {
+      setSplitFormOpen(false);
+      setSelectedDetailTransaction(null);
+    }
   };
 
   return (
@@ -286,10 +331,129 @@ export const TransactionDetailModal: React.FC = () => {
                 </p>
               </div>
             )}
+
+            {/* Split Payment Form */}
+            {splitFormOpen && (
+              <div className="space-y-4 border-t border-white/5 pt-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
+                    Split Payment
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSplitFormOpen(false)}
+                    className="text-[10px] font-mono text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                {/* Original due date */}
+                <div className="p-3 bg-zinc-900/30 border border-white/5 rounded-xl space-y-1.5">
+                  <label className="text-[9px] font-mono text-zinc-500 uppercase block">
+                    Original Due Date
+                  </label>
+                  <input
+                    type="date"
+                    value={splitDueDate}
+                    onChange={(e) => setSplitDueDate(e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-white/30"
+                  />
+                  <p className="text-[9px] text-zinc-600 font-mono">
+                    The occurrence date that will be replaced by these sub-payments.
+                  </p>
+                </div>
+
+                {/* Split parts */}
+                <div className="space-y-2">
+                  {splitParts.map((part, idx) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <span className="text-[10px] font-mono text-zinc-500 w-4 shrink-0">
+                        {idx + 1}.
+                      </span>
+                      <input
+                        type="date"
+                        value={part.dateStr}
+                        onChange={(e) => {
+                          const updated = [...splitParts];
+                          updated[idx] = { ...updated[idx], dateStr: e.target.value };
+                          setSplitParts(updated);
+                        }}
+                        className="flex-1 bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-white/30"
+                      />
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        placeholder="Amount"
+                        value={part.amount}
+                        onChange={(e) => {
+                          const updated = [...splitParts];
+                          updated[idx] = { ...updated[idx], amount: e.target.value };
+                          setSplitParts(updated);
+                        }}
+                        className="w-24 bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-white/30"
+                      />
+                      {splitParts.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => setSplitParts(splitParts.filter((_, i) => i !== idx))}
+                          className="text-zinc-600 hover:text-red-400 transition-colors shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add part / total */}
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setSplitParts([...splitParts, { dateStr: "", amount: "" }])}
+                    className="flex items-center gap-1 text-[10px] font-mono text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" /> Add part
+                  </button>
+                  <div className="text-[10px] font-mono">
+                    <span className="text-zinc-500">Total: </span>
+                    <span className={Math.abs(splitRemainder) < 0.01 ? "text-emerald-400" : "text-amber-400"}>
+                      ${splitTotal.toFixed(2)}
+                    </span>
+                    <span className="text-zinc-500"> / ${tx.amount.toFixed(2)}</span>
+                    {Math.abs(splitRemainder) >= 0.01 && (
+                      <span className="text-amber-400 ml-1">
+                        ({splitRemainder > 0 ? "-" : "+"}${Math.abs(splitRemainder).toFixed(2)} remaining)
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={!splitValid || splitSaving}
+                  onClick={handleSplitSave}
+                  className="w-full px-4 py-2.5 rounded-xl bg-violet-600/80 hover:bg-violet-600 disabled:opacity-40 disabled:cursor-not-allowed border border-violet-500/30 text-white font-bold text-xs transition-all"
+                >
+                  {splitSaving ? "Saving…" : "Save Split"}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Footer Buttons */}
           <div className="p-6 bg-zinc-900/40 border-t border-white/5 flex flex-col sm:flex-row gap-3">
+            {!splitFormOpen && (
+              <button
+                type="button"
+                onClick={openSplitForm}
+                className="w-full px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-zinc-200 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Scissors className="w-3.5 h-3.5" />
+                Split this payment
+              </button>
+            )}
             <div className="flex gap-2 w-full">
               <button
                 type="button"

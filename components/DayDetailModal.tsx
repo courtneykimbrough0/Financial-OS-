@@ -178,6 +178,11 @@ export const DayDetailModal: React.FC = () => {
                           <div>
                             <div className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5 flex-wrap">
                               <span>{t.item.title}</span>
+                              {t.splitLabel && (
+                                <span className="px-1.5 py-0.5 bg-violet-500/10 text-violet-400 text-[9px] rounded-md font-bold uppercase tracking-wider">
+                                  {t.splitLabel}
+                                </span>
+                              )}
                               {t.status === "verified" && (
                                 <span className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[9px] rounded-md font-bold uppercase tracking-wider">
                                   Verified ✓
