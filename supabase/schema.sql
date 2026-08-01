@@ -29,13 +29,13 @@ create index if not exists accounts_user_id_idx on public.accounts (user_id);
 alter table public.accounts enable row level security;
 
 create policy "accounts_select_own" on public.accounts
-  for select using (auth.uid() = user_id);
+  for select using ((select auth.uid()) = user_id);
 create policy "accounts_insert_own" on public.accounts
-  for insert with check (auth.uid() = user_id);
+  for insert with check ((select auth.uid()) = user_id);
 create policy "accounts_update_own" on public.accounts
-  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  for update using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create policy "accounts_delete_own" on public.accounts
-  for delete using (auth.uid() = user_id);
+  for delete using ((select auth.uid()) = user_id);
 
 -- ---------------------------------------------------------------------------
 -- transactions (RecurringTransaction)
@@ -82,17 +82,20 @@ create table if not exists public.transactions (
 );
 
 create index if not exists transactions_user_id_idx on public.transactions (user_id);
+create index if not exists transactions_account_id_idx on public.transactions (account_id);
+create index if not exists transactions_funding_account_id_idx on public.transactions (funding_account_id);
+create index if not exists transactions_target_account_id_idx on public.transactions (target_account_id);
 
 alter table public.transactions enable row level security;
 
 create policy "transactions_select_own" on public.transactions
-  for select using (auth.uid() = user_id);
+  for select using ((select auth.uid()) = user_id);
 create policy "transactions_insert_own" on public.transactions
-  for insert with check (auth.uid() = user_id);
+  for insert with check ((select auth.uid()) = user_id);
 create policy "transactions_update_own" on public.transactions
-  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  for update using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create policy "transactions_delete_own" on public.transactions
-  for delete using (auth.uid() = user_id);
+  for delete using ((select auth.uid()) = user_id);
 
 -- ---------------------------------------------------------------------------
 -- transaction_overrides
@@ -115,13 +118,13 @@ create index if not exists transaction_overrides_user_id_idx on public.transacti
 alter table public.transaction_overrides enable row level security;
 
 create policy "overrides_select_own" on public.transaction_overrides
-  for select using (auth.uid() = user_id);
+  for select using ((select auth.uid()) = user_id);
 create policy "overrides_insert_own" on public.transaction_overrides
-  for insert with check (auth.uid() = user_id);
+  for insert with check ((select auth.uid()) = user_id);
 create policy "overrides_update_own" on public.transaction_overrides
-  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  for update using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create policy "overrides_delete_own" on public.transaction_overrides
-  for delete using (auth.uid() = user_id);
+  for delete using ((select auth.uid()) = user_id);
 
 -- ---------------------------------------------------------------------------
 -- user_settings — replaces the old "0 accounts = show onboarding" heuristic
@@ -137,10 +140,29 @@ create table if not exists public.user_settings (
 alter table public.user_settings enable row level security;
 
 create policy "user_settings_select_own" on public.user_settings
-  for select using (auth.uid() = user_id);
+  for select using ((select auth.uid()) = user_id);
 create policy "user_settings_insert_own" on public.user_settings
-  for insert with check (auth.uid() = user_id);
+  for insert with check ((select auth.uid()) = user_id);
 create policy "user_settings_update_own" on public.user_settings
-  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  for update using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create policy "user_settings_delete_own" on public.user_settings
-  for delete using (auth.uid() = user_id);
+  for delete using ((select auth.uid()) = user_id);
+
+-- ---------------------------------------------------------------------------
+-- hardening: Supabase provisions every new project with an event-trigger
+-- helper, public.rls_auto_enable(), that isn't part of this app's schema.
+-- It's a SECURITY DEFINER function and Postgres exposes it to PostgREST as
+-- a callable RPC by default, which Supabase's own advisor flags even though
+-- the function is inert outside of event-trigger context. Lock it down if
+-- present; no-op (and no error) on projects where it doesn't exist.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'rls_auto_enable'
+  ) then
+    revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+  end if;
+end $$;
