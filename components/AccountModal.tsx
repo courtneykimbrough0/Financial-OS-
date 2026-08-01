@@ -17,7 +17,7 @@ export const AccountModal: React.FC = () => {
   } = useFinancialData();
 
   const [accFormName, setAccFormName] = useState<string>("");
-  const [accFormType, setAccFormType] = useState<"checking" | "savings" | "credit-card" | "other">(
+  const [accFormType, setAccFormType] = useState<"checking" | "savings" | "other">(
     "checking"
   );
   const [accFormCustomType, setAccFormCustomType] = useState<string>("");
@@ -186,7 +186,6 @@ export const AccountModal: React.FC = () => {
                 >
                   <option value="checking">Checking</option>
                   <option value="savings">Savings</option>
-                  <option value="credit-card">Credit Card</option>
                   <option value="other">Other</option>
                 </select>
               </div>

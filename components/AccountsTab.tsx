@@ -94,9 +94,6 @@ export const AccountsTab: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {accounts.map((acc) => {
-              const linkedLiability = transactions.find(
-                (t) => t.category === "liability" && t.targetAccountId === acc.id
-              );
 
               return (
                 <div
@@ -108,9 +105,7 @@ export const AccountsTab: React.FC = () => {
                       <h4 className="text-sm font-bold text-white">{acc.name}</h4>
                       <span
                         className={`text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md inline-block mt-1 ${
-                          acc.type === "credit-card"
-                            ? "bg-amber-500/10 text-amber-400 border border-amber-500/15"
-                            : acc.type === "savings"
+                          acc.type === "savings"
                             ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/15"
                             : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/15"
                         }`}
@@ -118,13 +113,8 @@ export const AccountsTab: React.FC = () => {
                         {acc.type === "other" ? acc.customType || "Other" : acc.type}
                       </span>
                     </div>
-                    <span
-                      className={`text-base font-bold font-mono ${
-                        acc.type === "credit-card" ? "text-amber-400" : "text-emerald-400"
-                      }`}
-                    >
-                      {acc.type === "credit-card" ? "-" : ""}$
-                      {acc.balance.toLocaleString("en-US", {
+                    <span className="text-base font-bold font-mono text-emerald-400">
+                      ${acc.balance.toLocaleString("en-US", {
                         minimumFractionDigits: 2,
                       })}
                     </span>
@@ -139,28 +129,7 @@ export const AccountsTab: React.FC = () => {
                     </div>
                   )}
 
-                  {acc.type === "credit-card" && (
-                    <div className="mt-3.5 pt-3.5 border-t border-white/5">
-                      {linkedLiability ? (
-                        <div className="flex justify-between items-center text-[10px] text-zinc-400">
-                          <span>Scheduled Payment:</span>
-                          <span className="font-mono font-bold text-white">
-                            ${linkedLiability.amount}/mo
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="p-2 bg-amber-500/5 border border-amber-500/10 rounded-xl flex flex-col gap-1">
-                          <span className="text-[10px] text-amber-400 font-bold">
-                            Needs Minimum Payment Setup
-                          </span>
-                          <span className="text-[9px] text-zinc-400">
-                            No scheduled payment found in liabilities. Add one to keep your forecast
-                            precise.
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+
 
                   <div className="flex gap-2 justify-end mt-4 pt-3.5 border-t border-white/5 opacity-80 group-hover:opacity-100 transition-opacity">
                     <button

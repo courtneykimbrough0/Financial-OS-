@@ -297,12 +297,7 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // Derived Calculations
   const initialBalance = useMemo(() => {
-    return accounts.reduce((acc, curr) => {
-      if (curr.type === "credit-card") {
-        return acc - curr.balance;
-      }
-      return acc + curr.balance;
-    }, 0);
+    return accounts.reduce((acc, curr) => acc + curr.balance, 0);
   }, [accounts]);
 
   const forecast = useMemo(() => {
@@ -348,7 +343,7 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (loading) return alerts;
 
     const timeline = calendarForecastTimeline;
-    const cashAccounts = accounts.filter((a) => a.type !== "credit-card");
+    const cashAccounts = accounts;
     const checkedDates = new Set<string>();
 
     for (const day of timeline) {
