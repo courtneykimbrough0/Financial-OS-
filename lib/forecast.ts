@@ -253,6 +253,10 @@ export interface PayoffDetails {
   message?: string;
 }
 
+// Safety cap for the day-by-day payoff simulation below (~50 years),
+// mirroring the old monthly simulator's 600-month cap.
+const MAX_PAYOFF_SIMULATION_DAYS = 365 * 50;
+
 export function calculatePayoffDetails(
   txOrBalance: RecurringTransaction | number,
   aprInput?: number,
@@ -260,16 +264,27 @@ export function calculatePayoffDetails(
 ): PayoffDetails {
   let currentBalance = 0;
   let apr = 0;
-  let monthlyPayment = 0;
+  let paymentSchedule: Pick<RecurringTransaction, 'amount' | 'frequency' | 'startDate' | 'semiMonthlyDays'>;
 
   if (typeof txOrBalance === "object" && txOrBalance !== null) {
     currentBalance = txOrBalance.currentBalance || 0;
     apr = txOrBalance.interestRate || 0;
-    monthlyPayment = getMonthlyEquivalent(txOrBalance) || txOrBalance.amount || 0;
+    paymentSchedule = {
+      amount: txOrBalance.amount || 0,
+      frequency: txOrBalance.frequency,
+      startDate: txOrBalance.startDate,
+      semiMonthlyDays: txOrBalance.semiMonthlyDays,
+    };
   } else {
     currentBalance = typeof txOrBalance === "number" ? txOrBalance : 0;
     apr = aprInput || 0;
-    monthlyPayment = monthlyPaymentInput || 0;
+    // No real payment schedule for this legacy numeric overload — model it as
+    // a monthly payment starting today.
+    paymentSchedule = {
+      amount: monthlyPaymentInput || 0,
+      frequency: 'monthly',
+      startDate: formatDateLocal(new Date()),
+    };
   }
 
   if (!currentBalance || currentBalance <= 0) {
@@ -287,43 +302,61 @@ export function calculatePayoffDetails(
   }
 
   const aprValue = Math.max(0, apr || 0);
-  const monthlyRate = aprValue / 100 / 12;
+  // Snapshot stats — "cost of carrying this balance for a day/month right
+  // now," shown in the UI. Not part of the payoff simulation itself.
   const dailyInterest = (currentBalance * (aprValue / 100)) / 365;
-  const monthlyInterest = currentBalance * monthlyRate;
+  const monthlyInterest = currentBalance * (aprValue / 100 / 12);
 
-  if (monthlyPayment <= monthlyInterest && aprValue > 0) {
-    return {
-      monthsToPayoff: null,
-      totalInterestPaid: Infinity,
-      dailyInterest: Math.round(dailyInterest * 100) / 100,
-      monthlyInterest: Math.round(monthlyInterest * 100) / 100,
-      dailyInterestAccrual: Math.round(dailyInterest * 100) / 100,
-      monthlyInterestAccrual: Math.round(monthlyInterest * 100) / 100,
-      payoffDate: null,
-      payoffDateStr: "Infinite",
-      isPayoffPossible: false,
-      message: "Monthly payment does not cover interest!",
-    };
-  }
+  const notPayoffPossible = (): PayoffDetails => ({
+    monthsToPayoff: null,
+    totalInterestPaid: Infinity,
+    dailyInterest: Math.round(dailyInterest * 100) / 100,
+    monthlyInterest: Math.round(monthlyInterest * 100) / 100,
+    dailyInterestAccrual: Math.round(dailyInterest * 100) / 100,
+    monthlyInterestAccrual: Math.round(monthlyInterest * 100) / 100,
+    payoffDate: null,
+    payoffDateStr: "Infinite",
+    isPayoffPossible: false,
+    message: "Payment does not cover interest!",
+  });
+
+  // Day-by-day simulation — same daily accrual + interest-first-then-principal
+  // order as generateForecast(), so this figure agrees with the dashboard
+  // forecast instead of the old flat monthly-compounding approximation.
+  const dailyRate = aprValue / 100 / 365;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   let balance = currentBalance;
-  let months = 0;
   let totalInterest = 0;
+  let day = 0;
 
-  while (balance > 0.01 && months < 600) {
-    const interest = balance * monthlyRate;
+  while (balance > 0.01 && day < MAX_PAYOFF_SIMULATION_DAYS) {
+    const interest = balance * dailyRate;
+    balance += interest;
     totalInterest += interest;
-    const principalPaid = monthlyPayment - interest;
-    balance -= principalPaid;
-    months++;
+
+    const cursor = new Date(today);
+    cursor.setDate(today.getDate() + day);
+    if (isTransactionOccurring(cursor, paymentSchedule)) {
+      const applied = Math.min(paymentSchedule.amount, balance);
+      balance -= applied;
+    }
+
+    day++;
   }
 
-  const targetDate = new Date();
-  targetDate.setMonth(targetDate.getMonth() + months);
-  const payoffDate = targetDate.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  if (balance > 0.01) {
+    return notPayoffPossible();
+  }
+
+  const payoffCursor = new Date(today);
+  payoffCursor.setDate(today.getDate() + day - 1);
+  const payoffDate = payoffCursor.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  const monthsToPayoff = Math.max(1, Math.round(day / 30.44));
 
   return {
-    monthsToPayoff: months,
+    monthsToPayoff,
     totalInterestPaid: Math.round(totalInterest * 100) / 100,
     dailyInterest: Math.round(dailyInterest * 100) / 100,
     monthlyInterest: Math.round(monthlyInterest * 100) / 100,
@@ -368,6 +401,12 @@ export interface PayoffStrategyResult {
   }[];
 }
 
+// TODO(#45 follow-up): still uses flat monthly compounding (accrue once/month,
+// then pay), unlike generateForecast()/calculatePayoffDetails() which now
+// accrue interest daily against the real payment calendar. Not reachable in
+// the UX today (the Payoff Strategy Planner is hidden per #39), but its
+// numbers will disagree with the per-liability "Payoff:" badge if this is
+// ever re-exposed — bring it onto the same daily-accrual model first.
 export function simulateLiabilityPayoff(
   liabilities: RecurringTransaction[],
   extraMonthlyBudgetOrStrategy: number | 'avalanche' | 'snowball' | 'minimums' = 0,
@@ -582,7 +621,10 @@ export function getFrequencySubtext(t: { amount: number; frequency: TransactionF
 }
 
 // Check if a transaction occurs on a specific day
-export function isTransactionOccurring(day: Date, transaction: RecurringTransaction): boolean {
+export function isTransactionOccurring(
+  day: Date,
+  transaction: Pick<RecurringTransaction, 'startDate' | 'frequency' | 'semiMonthlyDays'>
+): boolean {
   const tStart = parseDateLocal(transaction.startDate);
   
   // Truncate times for accurate date-only comparison
@@ -672,9 +714,25 @@ export function generateForecast({
   
   const end = new Date(startDate);
   end.setDate(startDate.getDate() + numberOfDays - 1);
-  
+
   const days = getDaysInRange(startDate, end);
-  
+
+  // Per-liability running balance, tracked independently of accounts so that
+  // interest accrues correctly even when a liability has no targetAccountId
+  // (the common case — targetAccountId is an optional advanced linkage).
+  // Only liabilities with a positive interestRate AND a known currentBalance
+  // use daily accrual; everything else keeps the legacy payment-only path so
+  // its trajectory stays byte-for-byte identical to before this change.
+  const liabilityBalances: Record<string, number> = {};
+  const useInterestAccrual: Record<string, boolean> = {};
+  for (const t of transactions) {
+    if (t.category === 'liability') {
+      const seed = t.currentBalance ?? 0;
+      liabilityBalances[t.id] = seed;
+      useInterestAccrual[t.id] = !!t.interestRate && t.interestRate > 0 && seed > 0;
+    }
+  }
+
   for (const day of days) {
     let incoming = 0;
     let outgoing = 0;
@@ -686,6 +744,18 @@ export function generateForecast({
     }[] = [];
     
     const dayStr = formatDateLocal(day);
+
+    // Daily interest accrual — applies every day regardless of whether a
+    // payment lands today, independent of the transaction's own frequency.
+    for (const t of transactions) {
+      if (t.category === 'liability' && useInterestAccrual[t.id]) {
+        const bal = liabilityBalances[t.id];
+        if (bal > 0) {
+          const dailyInterest = bal * ((t.interestRate as number) / 100 / 365);
+          liabilityBalances[t.id] = bal + dailyInterest;
+        }
+      }
+    }
 
     // Activate any account starting on or before today
     for (const acc of activeAccounts) {
@@ -737,15 +807,31 @@ export function generateForecast({
           
           if (t.category === 'liability') {
             const targetAccId = t.targetAccountId;
-            const owed = targetAccId ? (currentBalances[targetAccId] ?? amt) : amt;
-            const appliedAmt = Math.min(amt, Math.max(0, owed));
-
             const fundAccId = t.fundingAccountId;
-            if (fundAccId && currentBalances[fundAccId] !== undefined) {
-              currentBalances[fundAccId] -= appliedAmt;
-            }
-            if (targetAccId && currentBalances[targetAccId] !== undefined) {
-              currentBalances[targetAccId] = Math.max(0, currentBalances[targetAccId] - amt);
+
+            if (useInterestAccrual[t.id]) {
+              // Balance already includes today's accrued interest (see above),
+              // so paying down that balance pays interest first, then principal.
+              const bal = liabilityBalances[t.id];
+              const appliedAmt = Math.min(amt, Math.max(0, bal));
+              liabilityBalances[t.id] = Math.max(0, bal - appliedAmt);
+
+              if (fundAccId && currentBalances[fundAccId] !== undefined) {
+                currentBalances[fundAccId] -= appliedAmt;
+              }
+              if (targetAccId && currentBalances[targetAccId] !== undefined) {
+                currentBalances[targetAccId] = liabilityBalances[t.id];
+              }
+            } else {
+              const owed = targetAccId ? (currentBalances[targetAccId] ?? amt) : amt;
+              const appliedAmt = Math.min(amt, Math.max(0, owed));
+
+              if (fundAccId && currentBalances[fundAccId] !== undefined) {
+                currentBalances[fundAccId] -= appliedAmt;
+              }
+              if (targetAccId && currentBalances[targetAccId] !== undefined) {
+                currentBalances[targetAccId] = Math.max(0, currentBalances[targetAccId] - amt);
+              }
             }
           } else if (t.category === 'savings') {
             // Transfer from checking to savings
@@ -792,6 +878,19 @@ export function generateForecast({
       totalStartCashSum += bal;
     }
     
+    // Surface each interest-accruing liability's running balance under its own
+    // transaction id, in addition to any targetAccountId it's already mirrored
+    // into above. accountBalances stays a Record<string, number> (no shape
+    // change) — this only adds new keys, and only for liabilities using the
+    // new daily-accrual path, so non-interest-bearing liabilities and callers
+    // that only look up known account ids are unaffected.
+    const exposedBalances = { ...currentBalances };
+    for (const t of transactions) {
+      if (t.category === 'liability' && useInterestAccrual[t.id]) {
+        exposedBalances[t.id] = liabilityBalances[t.id];
+      }
+    }
+
     forecast.push({
       date: day,
       dateStr: formatDateLocal(day),
@@ -800,7 +899,7 @@ export function generateForecast({
       outgoing,
       endingBalance: totalCashSum,
       transactions: dayTransactions,
-      accountBalances: { ...currentBalances },
+      accountBalances: exposedBalances,
     });
   }
   
