@@ -155,7 +155,9 @@ interface FinancialOSContextType {
     wizSavingsTitle: string,
     wizSavingsAmount: string,
     wizSavingsFrequency: string,
-    wizSavingsStartDate: string
+    wizSavingsStartDate: string,
+    wizSavingsFundingId: string,
+    wizSavingsAccountId: string
   ) => Promise<boolean>;
   handleClearAllData: () => void;
   signOut: () => Promise<void>;
@@ -786,7 +788,9 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     wizSavingsTitle: string,
     wizSavingsAmount: string,
     wizSavingsFrequency: string,
-    wizSavingsStartDate: string
+    wizSavingsStartDate: string,
+    wizSavingsFundingId: string,
+    wizSavingsAccountId: string
   ): Promise<boolean> => {
     if (!userId) return false;
     setIsSaving(true);
@@ -824,18 +828,15 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
       // Add savings contributions if enabled
       if (wizSavingsEnabled && wizSavingsTitle.trim()) {
         const svAmt = parseFloat(wizSavingsAmount);
-        if (svAmt > 0) {
-          const savingsAcc = wizAccs.find((a) => a.type === "savings");
-          const checkingAcc = wizAccs.find((a) => a.type === "checking");
-
+        if (svAmt > 0 && wizSavingsFundingId && wizSavingsAccountId) {
           finalTxs.push({
             title: wizSavingsTitle.trim(),
             amount: svAmt,
             startDate: wizSavingsStartDate || launchDateStr,
             frequency: wizSavingsFrequency as any,
             category: "savings",
-            accountId: savingsAcc ? accountIdMap[savingsAcc.id] : undefined,
-            fundingAccountId: checkingAcc ? accountIdMap[checkingAcc.id] : undefined,
+            fundingAccountId: accountIdMap[wizSavingsFundingId],
+            targetAccountId: accountIdMap[wizSavingsAccountId],
           });
         }
       }

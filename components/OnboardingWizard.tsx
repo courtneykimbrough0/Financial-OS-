@@ -90,7 +90,9 @@ export const OnboardingWizard: React.FC = () => {
       wizSavingsTitle,
       wizSavingsAmount,
       wizSavingsFrequency,
-      wizSavingsStartDate
+      wizSavingsStartDate,
+      wizSavingsFundingId,
+      wizSavingsAccountId
     );
     if (!success) {
       setWizError("An error occurred while establishing your workspace. Please try again.");
@@ -544,10 +546,11 @@ export const OnboardingWizard: React.FC = () => {
                     </label>
                     <select
                       value={wizAccountId}
+                      required
                       onChange={(e) => setWizAccountId(e.target.value)}
                       className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
                     >
-                      <option value="">Select Asset Account (Default checking)</option>
+                      <option value="">Select an account...</option>
                       {wizAccounts
                         .map((acc) => (
                           <option key={acc.id} value={acc.id}>
@@ -567,6 +570,10 @@ export const OnboardingWizard: React.FC = () => {
                       const amt = parseFloat(wizAmount);
                       if (isNaN(amt) || amt <= 0) {
                         setWizError("Please enter a valid amount greater than 0.");
+                        return;
+                      }
+                      if (!wizAccountId) {
+                        setWizError("Please select an account to deposit this income into.");
                         return;
                       }
                       const payload: RecurringTransaction = {
@@ -829,11 +836,12 @@ export const OnboardingWizard: React.FC = () => {
                       Paid From Account
                     </label>
                     <select
-                      value={wizFundingAccountId}
-                      onChange={(e) => setWizFundingAccountId(e.target.value)}
+                      value={wizAccountId}
+                      required
+                      onChange={(e) => setWizAccountId(e.target.value)}
                       className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
                     >
-                      <option value="">Select Account (Default checking)</option>
+                      <option value="">Select an account...</option>
                       {wizAccounts.map((acc) => (
                         <option key={acc.id} value={acc.id}>
                           {acc.name} (
@@ -858,6 +866,10 @@ export const OnboardingWizard: React.FC = () => {
                         setWizError("Please enter a valid amount greater than 0.");
                         return;
                       }
+                      if (!wizAccountId) {
+                        setWizError("Please select an account to pay this from.");
+                        return;
+                      }
                       const payload: RecurringTransaction = {
                         id: generateId(),
                         title: wizTitle.trim(),
@@ -865,13 +877,13 @@ export const OnboardingWizard: React.FC = () => {
                         startDate: wizStartDate || launchDateStr,
                         frequency: wizFrequency as any,
                         category: wizExpenseType,
-                        fundingAccountId: wizFundingAccountId || undefined,
+                        accountId: wizAccountId || undefined,
                       };
                       setWizTransactions([...wizTransactions, payload]);
                       setWizTitle("");
                       setWizAmount("");
                       setWizFrequency("monthly");
-                      setWizFundingAccountId("");
+                      setWizAccountId("");
                       setWizError(null);
                     }}
                     className="w-full py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-md mt-2 cursor-pointer"
@@ -1170,10 +1182,11 @@ export const OnboardingWizard: React.FC = () => {
                     </label>
                     <select
                       value={wizFundingAccountId}
+                      required
                       onChange={(e) => setWizFundingAccountId(e.target.value)}
                       className="bg-zinc-900 border border-white/10 rounded-xl px-2.5 py-2 text-[11px] text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
                     >
-                      <option value="">Select Asset (Default checking)</option>
+                      <option value="">Select an account...</option>
                       {wizAccounts
                         .map((acc) => (
                           <option key={acc.id} value={acc.id}>
@@ -1193,6 +1206,10 @@ export const OnboardingWizard: React.FC = () => {
                       const amt = parseFloat(wizAmount);
                       if (isNaN(amt) || amt <= 0) {
                         setWizError("Please enter a valid amount greater than 0.");
+                        return;
+                      }
+                      if (!wizFundingAccountId) {
+                        setWizError("Please select an account to pay this from.");
                         return;
                       }
                       const payload: RecurringTransaction = {

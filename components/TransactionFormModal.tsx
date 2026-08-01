@@ -420,11 +420,12 @@ export const TransactionFormModal: React.FC = () => {
                       </label>
                       <select
                         value={formAccountId}
+                        required
                         disabled={isSaving}
                         onChange={(e) => setFormAccountId(e.target.value)}
                         className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-emerald-500 text-zinc-100 transition-colors cursor-pointer"
                       >
-                        <option value="">Select Asset Account (Default checking)</option>
+                        <option value="">Select an account...</option>
                         {accounts
                           .map((acc) => (
                             <option key={acc.id} value={acc.id}>
@@ -480,7 +481,7 @@ export const TransactionFormModal: React.FC = () => {
                       <div className="flex justify-between text-zinc-300">
                         <span>Deposit To:</span>
                         <span className="font-semibold text-white">
-                          {accounts.find((a) => a.id === formAccountId)?.name || "Default checking"}
+                          {accounts.find((a) => a.id === formAccountId)?.name}
                         </span>
                       </div>
                       <div className="flex justify-between text-zinc-300">
@@ -771,11 +772,12 @@ export const TransactionFormModal: React.FC = () => {
                           </label>
                           <select
                             value={formFundingAccountId}
+                            required
                             disabled={isSaving}
                             onChange={(e) => setFormFundingAccountId(e.target.value)}
                             className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500 text-zinc-100 transition-colors cursor-pointer"
                           >
-                            <option value="">Select Account (Default checking)</option>
+                            <option value="">Select an account...</option>
                             {accounts
                               .map((acc) => (
                                 <option key={acc.id} value={acc.id}>
@@ -791,11 +793,12 @@ export const TransactionFormModal: React.FC = () => {
                           </label>
                           <select
                             value={formTargetAccountId}
+                            required
                             disabled={isSaving}
                             onChange={(e) => setFormTargetAccountId(e.target.value)}
                             className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500 text-zinc-100 transition-colors cursor-pointer"
                           >
-                            <option value="">Select Account (Default savings)</option>
+                            <option value="">Select an account...</option>
                             {accounts
                               .map((acc) => (
                                 <option key={acc.id} value={acc.id}>
@@ -811,12 +814,13 @@ export const TransactionFormModal: React.FC = () => {
                           Paid From Account
                         </label>
                         <select
-                          value={formFundingAccountId}
+                          value={formAccountId}
+                          required
                           disabled={isSaving}
-                          onChange={(e) => setFormFundingAccountId(e.target.value)}
+                          onChange={(e) => setFormAccountId(e.target.value)}
                           className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-sky-500 text-zinc-100 transition-colors cursor-pointer"
                         >
-                          <option value="">Select Account (Default checking)</option>
+                          <option value="">Select an account...</option>
                           {accounts.map((acc) => (
                             <option key={acc.id} value={acc.id}>
                               {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
@@ -880,15 +884,13 @@ export const TransactionFormModal: React.FC = () => {
                           <div className="flex justify-between text-zinc-300">
                             <span>From:</span>
                             <span className="font-semibold text-white">
-                              {accounts.find((a) => a.id === formFundingAccountId)?.name ||
-                                "Default checking"}
+                              {accounts.find((a) => a.id === formFundingAccountId)?.name}
                             </span>
                           </div>
                           <div className="flex justify-between text-zinc-300">
                             <span>To:</span>
                             <span className="font-semibold text-white font-mono">
-                              {accounts.find((a) => a.id === formTargetAccountId)?.name ||
-                                "Default savings"}
+                              {accounts.find((a) => a.id === formTargetAccountId)?.name}
                             </span>
                           </div>
                         </>
@@ -896,8 +898,7 @@ export const TransactionFormModal: React.FC = () => {
                         <div className="flex justify-between text-zinc-300">
                           <span>Paid From:</span>
                           <span className="font-semibold text-white">
-                            {accounts.find((a) => a.id === formFundingAccountId)?.name ||
-                              "Default checking"}
+                            {accounts.find((a) => a.id === formAccountId)?.name}
                           </span>
                         </div>
                       )}
@@ -1477,10 +1478,11 @@ export const TransactionFormModal: React.FC = () => {
                         </label>
                         <select
                           value={formFundingAccountId}
+                          required
                           onChange={(e) => setFormFundingAccountId(e.target.value)}
                           className="block w-full px-3.5 py-2.5 text-xs bg-zinc-950 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 transition-colors cursor-pointer font-medium"
                         >
-                          <option value="">Select Account (Default checking)</option>
+                          <option value="">Select an account...</option>
                           {accounts
                             .map((acc) => (
                               <option key={acc.id} value={acc.id}>
@@ -1518,6 +1520,10 @@ export const TransactionFormModal: React.FC = () => {
                           }
                           if (!formStartDate) {
                             setWizardError("Please choose a valid Next payment due date.");
+                            return;
+                          }
+                          if (!formFundingAccountId) {
+                            setWizardError("Please select an account to pay from.");
                             return;
                           }
                           setWizardError(null);
@@ -1613,8 +1619,7 @@ export const TransactionFormModal: React.FC = () => {
                               <div className="pt-2 border-t border-white/5 flex justify-between text-zinc-400 text-xs">
                                 <span>Payment Source:</span>
                                 <span className="text-zinc-200 font-medium">
-                                  {accounts.find((a) => a.id === formFundingAccountId)?.name ||
-                                    "Checking Account"}
+                                  {accounts.find((a) => a.id === formFundingAccountId)?.name}
                                 </span>
                               </div>
                             )}

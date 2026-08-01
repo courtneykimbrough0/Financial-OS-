@@ -67,6 +67,27 @@ export function validateTransactionInput(
     }
   }
 
+  if (
+    input.category === "income" ||
+    input.category === "fixed-expense" ||
+    input.category === "subscription"
+  ) {
+    if (!input.accountId) {
+      return { success: false, error: "Please select an account for this transaction." };
+    }
+  } else if (input.category === "liability") {
+    if (!input.fundingAccountId) {
+      return { success: false, error: "Please select an account to fund this payment from." };
+    }
+  } else if (input.category === "savings" || input.category === "transfer") {
+    if (!input.fundingAccountId) {
+      return { success: false, error: "Please select an account to transfer from." };
+    }
+    if (!input.targetAccountId) {
+      return { success: false, error: "Please select an account to transfer to." };
+    }
+  }
+
   const tx: Omit<RecurringTransaction, "id"> & { id?: string } = {
     title: input.title.trim(),
     amount: amountNum,
