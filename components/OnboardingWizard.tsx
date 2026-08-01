@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Calendar as CalendarIcon,
   Sparkles,
   ArrowRight,
   ArrowLeft,
@@ -104,8 +104,8 @@ export const OnboardingWizard: React.FC = () => {
       {/* Header / Brand for onboarding */}
       <div className="w-full mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-2xl bg-zinc-950 border border-white/10 shadow-sm text-indigo-400 shrink-0">
-            <CalendarIcon className="w-5 h-5" />
+          <div className="flex items-center justify-center w-10 h-10 rounded-2xl bg-zinc-950 border border-white/10 shadow-sm shrink-0">
+            <Image src="/icon-mark.png" alt="" width={96} height={96} className="w-6 h-6" />
           </div>
           <div>
             <h1 className="text-base font-bold text-white tracking-tight leading-none">

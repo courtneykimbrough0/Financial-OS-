@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/utils/supabase/client'
-import { CalendarIcon, Mail, Loader2, ArrowRight } from 'lucide-react'
+import { Mail, Loader2, ArrowRight } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -40,10 +41,15 @@ export default function LoginPage() {
       <div className="w-full max-w-md z-10">
         {/* Branding header */}
         <div className="flex flex-col items-center mb-6 text-center">
-          <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-900 border border-white/10 shadow-lg text-indigo-400 mb-4">
-            <CalendarIcon className="w-6 h-6" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Welcome to Financial OS</h1>
+          <Image
+            src="/logo.png"
+            alt="Financial OS"
+            width={1038}
+            height={303}
+            priority
+            className="w-56 h-auto mb-4"
+          />
+          <h1 className="text-2xl font-bold tracking-tight text-white">Welcome</h1>
           <p className="text-sm text-zinc-400 mt-1.5">Cash engine, forecasting, and liability modeling</p>
         </div>
 
@@ -58,10 +64,6 @@ export default function LoginPage() {
             <li className="flex items-start gap-2">
               <span className="text-indigo-400 select-none mt-0.5">•</span>
               <span>Calendar and chart views show your balance days, weeks, or months ahead</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-indigo-400 select-none mt-0.5">•</span>
-              <span>Built-in payoff planner compares strategies for your liabilities</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-indigo-400 select-none mt-0.5">•</span>
