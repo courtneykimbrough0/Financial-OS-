@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
 import {
   Calendar as CalendarIcon,
   Sparkles,
@@ -62,7 +61,7 @@ export const OnboardingWizard: React.FC = () => {
   );
 
   // Liabilities step form inputs
-  const [wizLiabilityType, setWizLiabilityType] = useState<string>("credit_card");
+  const [wizLiabilityType, setWizLiabilityType] = useState<string>("card");
   const [wizCurrentBalance, setWizCurrentBalance] = useState<string>("");
   const [wizInterestRate, setWizInterestRate] = useState<string>("");
   const [wizHasCreditLimit, setWizHasCreditLimit] = useState<boolean>(false);
@@ -1100,13 +1099,10 @@ export const OnboardingWizard: React.FC = () => {
                       onChange={(e) => setWizLiabilityType(e.target.value)}
                       className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
                     >
-                      <option value="credit_card">Credit Card</option>
-                      <option value="personal_loan">Personal Loan</option>
-                      <option value="auto_loan">Auto Loan</option>
-                      <option value="mortgage">Home Mortgage</option>
-                      <option value="revolving_loc">Personal Line of Credit</option>
-                      <option value="student_loan">Student Loan</option>
-                      <option value="other">Other Contract / Lease</option>
+                      <option value="card">Card</option>
+                      <option value="loan">Loan</option>
+                      <option value="line_of_credit">Line of Credit</option>
+                      <option value="one_time">One Time</option>
                     </select>
                   </div>
 
@@ -1216,7 +1212,7 @@ export const OnboardingWizard: React.FC = () => {
                       setWizAmount("");
                       setWizFrequency("monthly");
                       setWizFundingAccountId("");
-                      setWizLiabilityType("credit_card");
+                      setWizLiabilityType("card");
                       setWizCurrentBalance("");
                       setWizInterestRate("");
                       setWizHasCreditLimit(false);

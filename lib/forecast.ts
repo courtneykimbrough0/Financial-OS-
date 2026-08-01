@@ -33,7 +33,7 @@ export interface RecurringTransaction {
   accountId?: string; // Primary account connected (for income, fixed-expense, subscription)
   fundingAccountId?: string; // Funding source (checking/savings) for liability/savings payments
   targetAccountId?: string; // Destination account (e.g., savings account)
-  liabilityType?: 'credit_card' | 'revolving_loc' | 'auto_loan' | 'mortgage' | 'personal_loan' | 'student_loan' | 'other';
+  liabilityType?: 'card' | 'loan' | 'line_of_credit' | 'one_time';
   interestRate?: number; // Annual Percentage Rate (APR %) e.g. 21.99
   currentBalance?: number; // Current outstanding balance owed
   startingBalance?: number; // Original / starting balance
@@ -867,7 +867,7 @@ export const SAMPLE_TRANSACTIONS: RecurringTransaction[] = [
     frequency: "monthly",
     category: "liability",
     fundingAccountId: "acc_checking",
-    liabilityType: "credit_card",
+    liabilityType: "card",
     currentBalance: 4200,
     startingBalance: 6000,
     creditLimit: 10000,
@@ -883,7 +883,7 @@ export const SAMPLE_TRANSACTIONS: RecurringTransaction[] = [
     frequency: "monthly",
     category: "liability",
     fundingAccountId: "acc_checking",
-    liabilityType: "auto_loan",
+    liabilityType: "loan",
     currentBalance: 8500,
     startingBalance: 18000,
     interestRate: 5.49,

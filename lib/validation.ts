@@ -81,7 +81,7 @@ export function validateTransactionInput(
   };
 
   if (input.category === "liability") {
-    tx.liabilityType = (input.liabilityType || "credit_card") as any;
+    tx.liabilityType = (input.liabilityType || "card") as any;
     tx.interestRate = input.interestRate ? parseFloat(input.interestRate) : undefined;
     tx.currentBalance = input.currentBalance ? parseFloat(input.currentBalance) : undefined;
     tx.startingBalance = input.startingBalance ? parseFloat(input.startingBalance) : undefined;

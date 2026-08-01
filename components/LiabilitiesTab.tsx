@@ -138,7 +138,7 @@ export const LiabilitiesTab: React.FC = () => {
           <Clock className="w-12 h-12 text-zinc-500 mb-3" />
           <p className="text-sm font-bold text-white">No Recurring Liabilities Registered</p>
           <p className="text-xs text-zinc-300 max-w-xs mt-1">
-            Track credit cards, auto loans, mortgages, or personal liabilities with interest accrual
+            Track cards, loans, lines of credit, or one-time liabilities with interest accrual
             and payoff timelines.
           </p>
         </div>
@@ -172,7 +172,7 @@ export const LiabilitiesTab: React.FC = () => {
                             : "bg-amber-500/10 text-amber-400 border-amber-500/20"
                         }`}
                       >
-                        {tx.liabilityType === "credit_card" ? (
+                        {tx.liabilityType === "card" || tx.liabilityType === "line_of_credit" ? (
                           <CreditCard className="w-5 h-5" />
                         ) : (
                           <Clock className="w-5 h-5" />
@@ -184,18 +184,14 @@ export const LiabilitiesTab: React.FC = () => {
                         </h4>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[10px] font-mono font-semibold text-zinc-300 uppercase bg-black/60 px-2 py-0.5 rounded border border-white/10">
-                            {tx.liabilityType === "credit_card"
-                              ? "Credit Card"
-                              : tx.liabilityType === "revolving_loc"
+                            {tx.liabilityType === "card"
+                              ? "Card"
+                              : tx.liabilityType === "line_of_credit"
                               ? "Line of Credit"
-                              : tx.liabilityType === "auto_loan"
-                              ? "Auto Loan"
-                              : tx.liabilityType === "mortgage"
-                              ? "Mortgage"
-                              : tx.liabilityType === "personal_loan"
-                              ? "Personal Loan"
-                              : tx.liabilityType === "student_loan"
-                              ? "Student Loan"
+                              : tx.liabilityType === "loan"
+                              ? "Loan"
+                              : tx.liabilityType === "one_time"
+                              ? "One Time"
                               : "Liability"}
                           </span>
                         </div>
