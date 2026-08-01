@@ -722,7 +722,7 @@ export function generateForecast({
           });
           
           // Deposit into connected account
-          const accId = t.accountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
+          const accId = t.accountId;
           if (accId && currentBalances[accId] !== undefined) {
             currentBalances[accId] += amt;
           }
@@ -740,7 +740,7 @@ export function generateForecast({
             const owed = targetAccId ? (currentBalances[targetAccId] ?? amt) : amt;
             const appliedAmt = Math.min(amt, Math.max(0, owed));
 
-            const fundAccId = t.fundingAccountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
+            const fundAccId = t.fundingAccountId;
             if (fundAccId && currentBalances[fundAccId] !== undefined) {
               currentBalances[fundAccId] -= appliedAmt;
             }
@@ -749,27 +749,27 @@ export function generateForecast({
             }
           } else if (t.category === 'savings') {
             // Transfer from checking to savings
-            const fundAccId = t.fundingAccountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
+            const fundAccId = t.fundingAccountId;
             if (fundAccId && currentBalances[fundAccId] !== undefined) {
               currentBalances[fundAccId] -= amt;
             }
-            const targetAccId = t.targetAccountId || (activeAccounts.find(a => a.type === 'savings')?.id);
+            const targetAccId = t.targetAccountId;
             if (targetAccId && currentBalances[targetAccId] !== undefined) {
               currentBalances[targetAccId] += amt;
             }
           } else if (t.category === 'transfer') {
             // General transfer between accounts
-            const fundAccId = t.fundingAccountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
+            const fundAccId = t.fundingAccountId;
             if (fundAccId && currentBalances[fundAccId] !== undefined) {
               currentBalances[fundAccId] -= amt;
             }
-            const targetAccId = t.targetAccountId || (activeAccounts.find(a => a.type === 'savings')?.id);
+            const targetAccId = t.targetAccountId;
             if (targetAccId && currentBalances[targetAccId] !== undefined) {
               currentBalances[targetAccId] += amt;
             }
           } else {
             // Fixed expense or subscription paid from account
-            const accId = t.accountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
+            const accId = t.accountId;
             if (accId && currentBalances[accId] !== undefined) {
               currentBalances[accId] -= amt;
             }
