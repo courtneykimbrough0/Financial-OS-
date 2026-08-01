@@ -79,7 +79,7 @@ export const OnboardingWizard: React.FC = () => {
 
   const handleLoadSampleData = async () => {
     setWizError(null);
-    await completeOnboarding(SAMPLE_ACCOUNTS, SAMPLE_TRANSACTIONS, false, "", "", "monthly", "");
+    await completeOnboarding(SAMPLE_ACCOUNTS, SAMPLE_TRANSACTIONS, false, "", "", "monthly", "", "", "");
   };
 
   const handleFinishOnboarding = async () => {
