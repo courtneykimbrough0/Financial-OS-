@@ -25,7 +25,6 @@ import { ConfirmAlertDialogs } from "@/components/ConfirmAlertDialogs";
 import { TransactionDetailModal } from "@/components/TransactionDetailModal";
 import { AccountDeletionWizard } from "@/components/AccountDeletionWizard";
 import { AccountModal } from "@/components/AccountModal";
-import { PayoffPlannerModal } from "@/components/PayoffPlannerModal";
 import DayDetailModal from "@/components/DayDetailModal";
 import TransactionFormModal from "@/components/TransactionFormModal";
 
@@ -225,7 +224,6 @@ function MainAppLayout() {
         <TransactionDetailModal />
         <AccountDeletionWizard />
         <AccountModal />
-        <PayoffPlannerModal />
         <DayDetailModal />
         <TransactionFormModal />
       </AnimatePresence>
