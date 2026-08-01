@@ -4,7 +4,7 @@ This is the single source of truth for any AI coding agent (Claude, Antigravity/
 
 ## What this is
 
-Financial OS — a personal cash-flow forecasting app: recurring income/expenses/subscriptions/liabilities/savings, a calendar/analytics dashboard, and a debt payoff planner (avalanche/snowball). Currently being taken from a local-only prototype to a Vercel-hosted, Supabase-backed app for an unpaid alpha test.
+Financial OS — a personal cash-flow forecasting app: recurring income/expenses/subscriptions/liabilities/savings, a calendar/analytics dashboard, and a liability payoff planner (avalanche/snowball). Currently being taken from a local-only prototype to a Vercel-hosted, Supabase-backed app for an unpaid alpha test.
 
 ## Stack
 
@@ -23,7 +23,7 @@ Before opening a PR, `bun run build` and `bun run lint` must both pass with zero
 ## Repo layout
 
 - `app/page.tsx` — main UI. Currently a single large client component; being decomposed into components as part of the Supabase migration (see current state below) rather than as a standalone refactor.
-- `lib/forecast.ts` — the forecasting engine: recurring-transaction date math, forecast generation, and debt payoff simulation (avalanche/snowball). Pure functions, no UI, no I/O — keep it that way.
+- `lib/forecast.ts` — the forecasting engine: recurring-transaction date math, forecast generation, and liability payoff simulation (avalanche/snowball). Pure functions, no UI, no I/O — keep it that way.
 - `lib/utils.ts` — small shared helpers (`cn()`, date-range helper).
 - `supabase/schema.sql` — the Postgres schema + Row Level Security policies. Run this in the Supabase SQL Editor when setting up a new project; it's the source of truth for the data model.
 - `docs/ALPHA_LAUNCH.md` — the phased plan for the Supabase/Vercel migration, environment variables, and workflow. Read this before starting work on auth, data persistence, or deployment.
@@ -38,6 +38,7 @@ The app has no backend yet in most respects: data lives in browser `localStorage
 - **Never commit `.env*` files** (only `.env.example`, which itself should contain no real values). `.gitignore` already excludes them — don't work around that.
 - **Never embed credentials in a git remote URL** (`https://user:TOKEN@github.com/...`). Use a credential helper (e.g. `git config --global credential.helper osxkeychain` on macOS) so tokens are never printed by `git remote -v` or similar commands, and never paste a raw token into chat, logs, or command output.
 - **Don't merge your own PRs.** Open the PR, then wait for review — either from a human or from another agent acting as reviewer.
+- **Never use the word "debt" or "debts" in user-facing copy** — always "liability"/"liabilities". This covers UI text, labels, tooltips, error messages, onboarding copy — anywhere a user reads it, singular or plural. (Internal code identifiers and comments are fine either way, e.g. `lib/forecast.ts` variable names — this rule is about what users see, not internal naming.) This has already slipped through once (a bottom-nav tab labeled "Debts") — grep for `debt` case-insensitively across `app/` and `components/` before opening a PR that touches any user-facing text, and don't rely on memory alone.
 
 ## Workflow
 

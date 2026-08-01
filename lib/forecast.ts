@@ -15,7 +15,7 @@ export interface TransactionOverride {
 export interface Account {
   id: string;
   name: string;
-  type: 'checking' | 'savings' | 'credit-card' | 'other';
+  type: 'checking' | 'savings' | 'other';
   customType?: string; // Must be filled if type is 'other'
   balance: number; // For cash accounts, current cash. For credit cards, outstanding balance (amount owed).
   startDate?: string; // Starting date (YYYY-MM-DD) when the starting balance becomes active
@@ -32,8 +32,8 @@ export interface RecurringTransaction {
   notes?: string;
   accountId?: string; // Primary account connected (for income, fixed-expense, subscription)
   fundingAccountId?: string; // Funding source (checking/savings) for liability/savings payments
-  targetAccountId?: string; // Destination account (e.g., credit-card outstanding balance or savings account)
-  liabilityType?: 'credit_card' | 'revolving_loc' | 'auto_loan' | 'mortgage' | 'personal_loan' | 'student_loan' | 'other';
+  targetAccountId?: string; // Destination account (e.g., savings account)
+  liabilityType?: 'card' | 'loan' | 'line_of_credit' | 'one_time';
   interestRate?: number; // Annual Percentage Rate (APR %) e.g. 21.99
   currentBalance?: number; // Current outstanding balance owed
   startingBalance?: number; // Original / starting balance
@@ -722,7 +722,7 @@ export function generateForecast({
           });
           
           // Deposit into connected account
-          const accId = t.accountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
+          const accId = t.accountId;
           if (accId && currentBalances[accId] !== undefined) {
             currentBalances[accId] += amt;
           }
@@ -740,7 +740,7 @@ export function generateForecast({
             const owed = targetAccId ? (currentBalances[targetAccId] ?? amt) : amt;
             const appliedAmt = Math.min(amt, Math.max(0, owed));
 
-            const fundAccId = t.fundingAccountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
+            const fundAccId = t.fundingAccountId;
             if (fundAccId && currentBalances[fundAccId] !== undefined) {
               currentBalances[fundAccId] -= appliedAmt;
             }
@@ -749,27 +749,27 @@ export function generateForecast({
             }
           } else if (t.category === 'savings') {
             // Transfer from checking to savings
-            const fundAccId = t.fundingAccountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
+            const fundAccId = t.fundingAccountId;
             if (fundAccId && currentBalances[fundAccId] !== undefined) {
               currentBalances[fundAccId] -= amt;
             }
-            const targetAccId = t.targetAccountId || (activeAccounts.find(a => a.type === 'savings')?.id);
+            const targetAccId = t.targetAccountId;
             if (targetAccId && currentBalances[targetAccId] !== undefined) {
               currentBalances[targetAccId] += amt;
             }
           } else if (t.category === 'transfer') {
             // General transfer between accounts
-            const fundAccId = t.fundingAccountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
+            const fundAccId = t.fundingAccountId;
             if (fundAccId && currentBalances[fundAccId] !== undefined) {
               currentBalances[fundAccId] -= amt;
             }
-            const targetAccId = t.targetAccountId || (activeAccounts.find(a => a.type === 'savings')?.id);
+            const targetAccId = t.targetAccountId;
             if (targetAccId && currentBalances[targetAccId] !== undefined) {
               currentBalances[targetAccId] += amt;
             }
           } else {
             // Fixed expense or subscription paid from account
-            const accId = t.accountId || (activeAccounts.find(a => a.type === 'checking')?.id) || (activeAccounts[0]?.id);
+            const accId = t.accountId;
             if (accId && currentBalances[accId] !== undefined) {
               currentBalances[accId] -= amt;
             }
@@ -778,26 +778,18 @@ export function generateForecast({
       }
     }
     
-    // Net cash total is sum of cash accounts minus outstanding credit card balances
+    // Net cash total is sum of cash accounts
     let totalCashSum = 0;
     for (const acc of activeAccounts) {
       const bal = currentBalances[acc.id];
-      if (acc.type === 'credit-card') {
-        totalCashSum -= bal;
-      } else {
-        totalCashSum += bal;
-      }
+      totalCashSum += bal;
     }
     
     // Day starting net cash total
     let totalStartCashSum = 0;
     for (const acc of activeAccounts) {
       const bal = dayStartingBalances[acc.id];
-      if (acc.type === 'credit-card') {
-        totalStartCashSum -= bal;
-      } else {
-        totalStartCashSum += bal;
-      }
+      totalStartCashSum += bal;
     }
     
     forecast.push({
@@ -831,12 +823,6 @@ export const SAMPLE_ACCOUNTS: Account[] = [
     name: "Security Pot",
     type: "savings",
     balance: 1500,
-  },
-  {
-    id: "acc_credit",
-    name: "Reserve Card",
-    type: "credit-card",
-    balance: 450,
   }
 ];
 
@@ -881,8 +867,7 @@ export const SAMPLE_TRANSACTIONS: RecurringTransaction[] = [
     frequency: "monthly",
     category: "liability",
     fundingAccountId: "acc_checking",
-    targetAccountId: "acc_credit",
-    liabilityType: "credit_card",
+    liabilityType: "card",
     currentBalance: 4200,
     startingBalance: 6000,
     creditLimit: 10000,
@@ -898,7 +883,7 @@ export const SAMPLE_TRANSACTIONS: RecurringTransaction[] = [
     frequency: "monthly",
     category: "liability",
     fundingAccountId: "acc_checking",
-    liabilityType: "auto_loan",
+    liabilityType: "loan",
     currentBalance: 8500,
     startingBalance: 18000,
     interestRate: 5.49,

@@ -4,7 +4,6 @@ import React from "react";
 import { motion } from "motion/react";
 import {
   Clock,
-  Zap,
   Plus,
   DollarSign,
   Calendar as CalendarIcon,
@@ -23,7 +22,6 @@ import {
 export const LiabilitiesTab: React.FC = () => {
   const {
     categorizedTransactions,
-    setIsPayoffPlannerOpen,
     setFormCategory,
     setIsAddingTransaction,
     setSelectedDetailTransaction,
@@ -52,14 +50,6 @@ export const LiabilitiesTab: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={() => setIsPayoffPlannerOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/20 border border-amber-500/40 text-amber-300 font-bold text-xs hover:from-amber-500/30 hover:to-amber-600/30 transition-all shadow-md shadow-amber-950/30 cursor-pointer"
-          >
-            <Zap className="w-4 h-4 text-amber-400" />
-            <span>Payoff Strategy Planner</span>
-          </button>
-
           <button
             onClick={() => {
               setFormCategory("liability");
@@ -138,7 +128,7 @@ export const LiabilitiesTab: React.FC = () => {
           <Clock className="w-12 h-12 text-zinc-500 mb-3" />
           <p className="text-sm font-bold text-white">No Recurring Liabilities Registered</p>
           <p className="text-xs text-zinc-300 max-w-xs mt-1">
-            Track credit cards, auto loans, mortgages, or personal liabilities with interest accrual
+            Track cards, loans, lines of credit, or one-time liabilities with interest accrual
             and payoff timelines.
           </p>
         </div>
@@ -172,7 +162,7 @@ export const LiabilitiesTab: React.FC = () => {
                             : "bg-amber-500/10 text-amber-400 border-amber-500/20"
                         }`}
                       >
-                        {tx.liabilityType === "credit_card" ? (
+                        {tx.liabilityType === "card" || tx.liabilityType === "line_of_credit" ? (
                           <CreditCard className="w-5 h-5" />
                         ) : (
                           <Clock className="w-5 h-5" />
@@ -184,18 +174,14 @@ export const LiabilitiesTab: React.FC = () => {
                         </h4>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[10px] font-mono font-semibold text-zinc-300 uppercase bg-black/60 px-2 py-0.5 rounded border border-white/10">
-                            {tx.liabilityType === "credit_card"
-                              ? "Credit Card"
-                              : tx.liabilityType === "revolving_loc"
+                            {tx.liabilityType === "card"
+                              ? "Card"
+                              : tx.liabilityType === "line_of_credit"
                               ? "Line of Credit"
-                              : tx.liabilityType === "auto_loan"
-                              ? "Auto Loan"
-                              : tx.liabilityType === "mortgage"
-                              ? "Mortgage"
-                              : tx.liabilityType === "personal_loan"
-                              ? "Personal Loan"
-                              : tx.liabilityType === "student_loan"
-                              ? "Student Loan"
+                              : tx.liabilityType === "loan"
+                              ? "Loan"
+                              : tx.liabilityType === "one_time"
+                              ? "One Time"
                               : "Liability"}
                           </span>
                         </div>

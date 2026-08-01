@@ -17,7 +17,7 @@ create table if not exists public.accounts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
   name text not null,
-  type text not null check (type in ('checking', 'savings', 'credit-card', 'other')),
+  type text not null check (type in ('checking', 'savings', 'other')),
   custom_type text,
   balance numeric not null default 0,
   start_date date,
@@ -62,7 +62,7 @@ create table if not exists public.transactions (
 
   -- liability-only fields
   liability_type text check (
-    liability_type in ('credit_card', 'revolving_loc', 'auto_loan', 'mortgage', 'personal_loan', 'student_loan', 'other')
+    liability_type in ('card', 'loan', 'line_of_credit', 'one_time')
   ),
   interest_rate numeric,
   current_balance numeric,

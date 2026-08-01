@@ -176,7 +176,7 @@ export const ExpensesSavingsTab: React.FC = () => {
         {(expenseSubTab === "all" || expenseSubTab === "subscriptions") && (
           <div className="flex flex-col gap-3">
             <h3 className="text-xs font-bold tracking-wider text-zinc-300 uppercase font-mono px-1">
-              Digital Subscriptions
+              Subscriptions
             </h3>
             {subscriptions.length === 0 ? (
               <div className="p-8 bg-zinc-900/20 border border-dashed border-white/10 rounded-2xl text-center text-zinc-400 text-xs font-medium">
@@ -255,7 +255,7 @@ export const ExpensesSavingsTab: React.FC = () => {
                       </div>
                       <div className="text-right">
                         <span className="text-base font-mono font-bold text-cyan-400 block">
-                          +$
+                          -$
                           {tx.amount.toLocaleString("en-US", {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,

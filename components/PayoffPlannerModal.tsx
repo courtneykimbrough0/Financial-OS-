@@ -44,7 +44,7 @@ export const PayoffPlannerModal: React.FC = () => {
                   Payoff Strategy Planner
                 </h3>
                 <p className="text-xs text-zinc-300">
-                  Compare Avalanche vs. Snowball payoff methods with custom monthly acceleration budgets.
+                  Compare payoff methods.
                 </p>
               </div>
             </div>
@@ -144,11 +144,11 @@ export const PayoffPlannerModal: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Extra Monthly Payment Slider */}
+                    {/* Extra Monthly Payment Input */}
                     <div className="bg-zinc-900/60 p-4 rounded-2xl border border-white/10 space-y-3">
                       <div className="flex justify-between items-center">
                         <label className="block text-[10px] font-mono tracking-widest text-amber-400 font-bold uppercase">
-                          Extra Monthly Acceleration
+                          Extra Monthly Payment
                         </label>
                         <span className="text-sm font-bold font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-lg border border-emerald-500/20">
                           +${payoffExtraBudget} / mo
@@ -156,13 +156,13 @@ export const PayoffPlannerModal: React.FC = () => {
                       </div>
 
                       <input
-                        type="range"
+                        type="number"
                         min="0"
                         max="2000"
                         step="25"
                         value={payoffExtraBudget}
                         onChange={(e) => setPayoffExtraBudget(parseFloat(e.target.value) || 0)}
-                        className="w-full accent-amber-500 cursor-pointer"
+                        className="w-full px-3 py-2 rounded-xl bg-zinc-900/60 border border-white/10 text-zinc-100 text-sm focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30 transition-all font-medium font-mono"
                       />
 
                       <div className="flex justify-between text-[11px] font-mono text-zinc-400">
@@ -222,7 +222,7 @@ export const PayoffPlannerModal: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
                         <Target className="w-4 h-4 text-amber-400" />
-                        Target Account Elimination Order (
+                        Payoff Order (
                         {payoffStrategy === "avalanche" ? "Highest APR First" : "Lowest Balance First"}
                         )
                       </h4>

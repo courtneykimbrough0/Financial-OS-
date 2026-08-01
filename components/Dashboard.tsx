@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   TrendingUp,
   Clock,
-  Zap,
   DollarSign,
   Percent,
   Info,
@@ -61,7 +60,6 @@ export const Dashboard: React.FC = () => {
     lowBalanceAlerts,
     initialBalance,
     calendarForecastTimeline,
-    setIsPayoffPlannerOpen,
   } = useFinancialData();
 
 
@@ -599,7 +597,7 @@ export const Dashboard: React.FC = () => {
                       </div>
                     ) : (
                       <div className="text-[10px] text-zinc-500 italic font-mono pl-4">
-                        No scheduled transfers or transactions.
+                        Nothing scheduled.
                       </div>
                     )}
                   </div>
@@ -611,7 +609,7 @@ export const Dashboard: React.FC = () => {
           {/* TRADITIONAL MONTH GRID VIEW */}
           {forecastRange === "month" && (
             <div className="flex flex-col gap-1.5 mt-2 overflow-x-auto">
-              <div className="grid grid-cols-7 gap-1.5 text-center min-w-[600px]">
+              <div className="grid grid-cols-7 gap-1.5 text-center">
                 {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map((day) => (
                   <div
                     key={day}
@@ -622,7 +620,7 @@ export const Dashboard: React.FC = () => {
                 ))}
               </div>
 
-              <div className="grid grid-cols-7 gap-1 sm:gap-1.5 min-w-[600px]">
+              <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
                 {calendarCells.map((cell, idx) => {
                   if (cell.isPadding || !cell.date) {
                     return (
@@ -960,7 +958,7 @@ export const Dashboard: React.FC = () => {
                     <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help transition-colors" />
                     <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/tooltip:flex flex-col items-center z-20 w-64 pointer-events-none">
                       <div className="bg-zinc-950 border border-white/10 text-zinc-300 text-[11px] py-1.5 px-2.5 rounded-lg shadow-xl text-center leading-normal">
-                        Visual representation of account balance path over the chosen forecast period.
+                        Your balance over time.
                       </div>
                       <div className="w-2 h-2 bg-zinc-950 border-r border-b border-white/10 rotate-45 -mt-1" />
                     </div>
@@ -1055,7 +1053,7 @@ export const Dashboard: React.FC = () => {
                     <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help transition-colors" />
                     <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/tooltip:flex flex-col items-center z-20 w-64 pointer-events-none">
                       <div className="bg-zinc-950 border border-white/10 text-zinc-300 text-[11px] py-1.5 px-2.5 rounded-lg shadow-xl text-center leading-normal">
-                        Daily income vs. expense activity throughout this forecast period.
+                        Daily income and expenses.
                       </div>
                       <div className="w-2 h-2 bg-zinc-950 border-r border-b border-white/10 rotate-45 -mt-1" />
                     </div>
@@ -1136,7 +1134,7 @@ export const Dashboard: React.FC = () => {
                           maximumFractionDigits: 0,
                         })}
                       </strong>
-                      . Excellent net-positive trajectory!
+                      . Looking Good.
                     </span>
                   ) : (
                     <span>
@@ -1148,7 +1146,7 @@ export const Dashboard: React.FC = () => {
                           maximumFractionDigits: 0,
                         })}
                       </strong>
-                      . Ensure you have sufficient cushion to cover expenses.
+                      . Check Upcoming Events.
                     </span>
                   )}
                 </p>
@@ -1167,9 +1165,9 @@ export const Dashboard: React.FC = () => {
                 <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help transition-colors" />
                 <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/tooltip:flex flex-col items-center z-20 w-64 pointer-events-none">
                   <div className="bg-zinc-950 border border-white/10 text-zinc-300 text-[11px] py-1.5 px-2.5 rounded-lg shadow-xl text-center leading-normal">
-                    Specific scheduled items affecting this{" "}
-                    {dashboardAccountFilter ? "selected account" : "net cash reserve"} during the
-                    selected forecast period.
+                    {dashboardAccountFilter
+                      ? "Items affecting this account."
+                      : "Items affecting this view."}
                   </div>
                   <div className="w-2 h-2 bg-zinc-950 border-r border-b border-white/10 rotate-45 -mt-1" />
                 </div>
@@ -1244,7 +1242,7 @@ export const Dashboard: React.FC = () => {
                   }).length === 0 && (
                     <tr>
                       <td colSpan={4} className="py-8 text-center text-zinc-500 font-mono text-xs">
-                        No transaction items scheduled for this account filter.
+                        Nothing scheduled.
                       </td>
                     </tr>
                   )}

@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Calendar as CalendarIcon,
   Sparkles,
   ArrowRight,
   ArrowLeft,
@@ -40,7 +40,7 @@ export const OnboardingWizard: React.FC = () => {
 
   // Accounts step form inputs
   const [wizAccName, setWizAccName] = useState<string>("");
-  const [wizAccType, setWizAccType] = useState<"checking" | "savings" | "credit-card" | "other">(
+  const [wizAccType, setWizAccType] = useState<"checking" | "savings" | "other">(
     "checking"
   );
   const [wizAccCustomType, setWizAccCustomType] = useState<string>("");
@@ -54,7 +54,7 @@ export const OnboardingWizard: React.FC = () => {
   const [wizStartDate, setWizStartDate] = useState<string>("");
   const [wizAccountId, setWizAccountId] = useState<string>("");
   const [wizFundingAccountId, setWizFundingAccountId] = useState<string>("");
-  const [wizTargetAccountId, setWizTargetAccountId] = useState<string>("");
+
 
   // Expense classification
   const [wizExpenseType, setWizExpenseType] = useState<"fixed-expense" | "subscription">(
@@ -62,7 +62,7 @@ export const OnboardingWizard: React.FC = () => {
   );
 
   // Liabilities step form inputs
-  const [wizLiabilityType, setWizLiabilityType] = useState<string>("credit_card");
+  const [wizLiabilityType, setWizLiabilityType] = useState<string>("card");
   const [wizCurrentBalance, setWizCurrentBalance] = useState<string>("");
   const [wizInterestRate, setWizInterestRate] = useState<string>("");
   const [wizHasCreditLimit, setWizHasCreditLimit] = useState<boolean>(false);
@@ -79,7 +79,7 @@ export const OnboardingWizard: React.FC = () => {
 
   const handleLoadSampleData = async () => {
     setWizError(null);
-    await completeOnboarding(SAMPLE_ACCOUNTS, SAMPLE_TRANSACTIONS, false, "", "", "monthly", "");
+    await completeOnboarding(SAMPLE_ACCOUNTS, SAMPLE_TRANSACTIONS, false, "", "", "monthly", "", "", "");
   };
 
   const handleFinishOnboarding = async () => {
@@ -90,7 +90,9 @@ export const OnboardingWizard: React.FC = () => {
       wizSavingsTitle,
       wizSavingsAmount,
       wizSavingsFrequency,
-      wizSavingsStartDate
+      wizSavingsStartDate,
+      wizSavingsFundingId,
+      wizSavingsAccountId
     );
     if (!success) {
       setWizError("An error occurred while establishing your workspace. Please try again.");
@@ -102,8 +104,8 @@ export const OnboardingWizard: React.FC = () => {
       {/* Header / Brand for onboarding */}
       <div className="w-full mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-2xl bg-zinc-950 border border-white/10 shadow-sm text-indigo-400 shrink-0">
-            <CalendarIcon className="w-5 h-5" />
+          <div className="flex items-center justify-center w-10 h-10 rounded-2xl bg-zinc-950 border border-white/10 shadow-sm shrink-0">
+            <Image src="/icon-mark.png" alt="" width={96} height={96} className="w-6 h-6" />
           </div>
           <div>
             <h1 className="text-base font-bold text-white tracking-tight leading-none">
@@ -208,7 +210,7 @@ export const OnboardingWizard: React.FC = () => {
                 <div>
                   <h4 className="text-sm font-bold text-white">1. Add Your Accounts</h4>
                   <p className="text-[11px] text-zinc-400">
-                    Establish your checking, savings, or credit cards.
+                    Establish your checking, savings, or other accounts.
                   </p>
                 </div>
 
@@ -244,16 +246,13 @@ export const OnboardingWizard: React.FC = () => {
                       >
                         <option value="checking">Checking</option>
                         <option value="savings">Savings</option>
-                        <option value="credit-card">Credit Card</option>
                         <option value="other">Other</option>
                       </select>
                     </div>
 
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                        {wizAccType === "credit-card"
-                          ? "Outstanding Balance ($)"
-                          : "Starting Balance ($)"}
+                        Starting Balance ($)
                       </label>
                       <input
                         type="number"
@@ -315,20 +314,6 @@ export const OnboardingWizard: React.FC = () => {
                       const updatedAccounts = [...wizAccounts, newAccount];
                       setWizAccounts(updatedAccounts);
 
-                      // If credit card, automatically pre-add liability with $0 so they configure minimum payments in Step 3
-                      if (wizAccType === "credit-card") {
-                        const matchingLiability: RecurringTransaction = {
-                          id: "l_" + String(new Date().getTime()),
-                          title: `${wizAccName.trim()} Minimum Payment`,
-                          amount: 0,
-                          startDate: launchDateStr,
-                          frequency: "monthly",
-                          category: "liability",
-                          targetAccountId: accId,
-                        };
-                        setWizTransactions((prev) => [...prev, matchingLiability]);
-                      }
-
                       // Reset form inputs
                       setWizAccName("");
                       setWizAccCustomType("");
@@ -369,7 +354,7 @@ export const OnboardingWizard: React.FC = () => {
                       Net Assets: $
                       {wizAccounts
                         .reduce(
-                          (sum, a) => (a.type === "credit-card" ? sum - a.balance : sum + a.balance),
+                          (sum, a) => sum + a.balance,
                           0
                         )
                         .toLocaleString("en-US", {
@@ -400,13 +385,8 @@ export const OnboardingWizard: React.FC = () => {
                               </p>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span
-                                className={`text-xs font-mono font-bold ${
-                                  acc.type === "credit-card" ? "text-amber-400" : "text-emerald-400"
-                                }`}
-                              >
-                                {acc.type === "credit-card" ? "-" : ""}$
-                                {acc.balance.toLocaleString("en-US", {
+                              <span className="text-xs font-mono font-bold text-emerald-400">
+                                ${acc.balance.toLocaleString("en-US", {
                                   minimumFractionDigits: 2,
                                 })}
                               </span>
@@ -443,7 +423,7 @@ export const OnboardingWizard: React.FC = () => {
                     type="button"
                     onClick={() => {
                       const hasCashAcc = wizAccounts.some(
-                        (a) => a.type !== "credit-card" && a.type !== "other"
+                        (a) => a.type !== "other"
                       );
                       if (!hasCashAcc) {
                         setWizError(
@@ -566,12 +546,12 @@ export const OnboardingWizard: React.FC = () => {
                     </label>
                     <select
                       value={wizAccountId}
+                      required
                       onChange={(e) => setWizAccountId(e.target.value)}
                       className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
                     >
-                      <option value="">Select Asset Account (Default checking)</option>
+                      <option value="">Select an account...</option>
                       {wizAccounts
-                        .filter((a) => a.type !== "credit-card")
                         .map((acc) => (
                           <option key={acc.id} value={acc.id}>
                             {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
@@ -590,6 +570,10 @@ export const OnboardingWizard: React.FC = () => {
                       const amt = parseFloat(wizAmount);
                       if (isNaN(amt) || amt <= 0) {
                         setWizError("Please enter a valid amount greater than 0.");
+                        return;
+                      }
+                      if (!wizAccountId) {
+                        setWizError("Please select an account to deposit this income into.");
                         return;
                       }
                       const payload: RecurringTransaction = {
@@ -852,17 +836,16 @@ export const OnboardingWizard: React.FC = () => {
                       Paid From Account
                     </label>
                     <select
-                      value={wizFundingAccountId}
-                      onChange={(e) => setWizFundingAccountId(e.target.value)}
+                      value={wizAccountId}
+                      required
+                      onChange={(e) => setWizAccountId(e.target.value)}
                       className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
                     >
-                      <option value="">Select Account (Default checking)</option>
+                      <option value="">Select an account...</option>
                       {wizAccounts.map((acc) => (
                         <option key={acc.id} value={acc.id}>
                           {acc.name} (
-                          {acc.type === "credit-card"
-                            ? "Credit Card"
-                            : acc.type === "other"
+                          {acc.type === "other"
                             ? acc.customType || "Other"
                             : acc.type}
                           )
@@ -883,6 +866,10 @@ export const OnboardingWizard: React.FC = () => {
                         setWizError("Please enter a valid amount greater than 0.");
                         return;
                       }
+                      if (!wizAccountId) {
+                        setWizError("Please select an account to pay this from.");
+                        return;
+                      }
                       const payload: RecurringTransaction = {
                         id: generateId(),
                         title: wizTitle.trim(),
@@ -890,13 +877,13 @@ export const OnboardingWizard: React.FC = () => {
                         startDate: wizStartDate || launchDateStr,
                         frequency: wizFrequency as any,
                         category: wizExpenseType,
-                        fundingAccountId: wizFundingAccountId || undefined,
+                        accountId: wizAccountId || undefined,
                       };
                       setWizTransactions([...wizTransactions, payload]);
                       setWizTitle("");
                       setWizAmount("");
                       setWizFrequency("monthly");
-                      setWizFundingAccountId("");
+                      setWizAccountId("");
                       setWizError(null);
                     }}
                     className="w-full py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-md mt-2 cursor-pointer"
@@ -1125,13 +1112,10 @@ export const OnboardingWizard: React.FC = () => {
                       onChange={(e) => setWizLiabilityType(e.target.value)}
                       className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
                     >
-                      <option value="credit_card">Credit Card</option>
-                      <option value="personal_loan">Personal Loan</option>
-                      <option value="auto_loan">Auto Loan</option>
-                      <option value="mortgage">Home Mortgage</option>
-                      <option value="revolving_loc">Personal Line of Credit</option>
-                      <option value="student_loan">Student Loan</option>
-                      <option value="other">Other Contract / Lease</option>
+                      <option value="card">Card</option>
+                      <option value="loan">Loan</option>
+                      <option value="line_of_credit">Line of Credit</option>
+                      <option value="one_time">One Time</option>
                     </select>
                   </div>
 
@@ -1192,46 +1176,24 @@ export const OnboardingWizard: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                        Paid From Account
-                      </label>
-                      <select
-                        value={wizFundingAccountId}
-                        onChange={(e) => setWizFundingAccountId(e.target.value)}
-                        className="bg-zinc-900 border border-white/10 rounded-xl px-2.5 py-2 text-[11px] text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
-                      >
-                        <option value="">Select Asset (Default checking)</option>
-                        {wizAccounts
-                          .filter((a) => a.type !== "credit-card")
-                          .map((acc) => (
-                            <option key={acc.id} value={acc.id}>
-                              {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                        Reduces Card (Optional)
-                      </label>
-                      <select
-                        value={wizTargetAccountId}
-                        onChange={(e) => setWizTargetAccountId(e.target.value)}
-                        className="bg-zinc-900 border border-white/10 rounded-xl px-2.5 py-2 text-[11px] text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
-                      >
-                        <option value="">Select Credit Card (If applicable)</option>
-                        {wizAccounts
-                          .filter((a) => a.type === "credit-card")
-                          .map((acc) => (
-                            <option key={acc.id} value={acc.id}>
-                              {acc.name}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
+                  <div className="flex flex-col gap-1.5 font-sans">
+                    <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
+                      Paid From Account
+                    </label>
+                    <select
+                      value={wizFundingAccountId}
+                      required
+                      onChange={(e) => setWizFundingAccountId(e.target.value)}
+                      className="bg-zinc-900 border border-white/10 rounded-xl px-2.5 py-2 text-[11px] text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
+                    >
+                      <option value="">Select an account...</option>
+                      {wizAccounts
+                        .map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
+                          </option>
+                        ))}
+                    </select>
                   </div>
 
                   <button
@@ -1246,6 +1208,10 @@ export const OnboardingWizard: React.FC = () => {
                         setWizError("Please enter a valid amount greater than 0.");
                         return;
                       }
+                      if (!wizFundingAccountId) {
+                        setWizError("Please select an account to pay this from.");
+                        return;
+                      }
                       const payload: RecurringTransaction = {
                         id: generateId(),
                         title: wizTitle.trim(),
@@ -1254,7 +1220,6 @@ export const OnboardingWizard: React.FC = () => {
                         frequency: wizFrequency as any,
                         category: "liability",
                         fundingAccountId: wizFundingAccountId || undefined,
-                        targetAccountId: wizTargetAccountId || undefined,
                         liabilityType: wizLiabilityType as any,
                         currentBalance: parseFloat(wizCurrentBalance) || undefined,
                         interestRate: parseFloat(wizInterestRate) || undefined,
@@ -1265,8 +1230,7 @@ export const OnboardingWizard: React.FC = () => {
                       setWizAmount("");
                       setWizFrequency("monthly");
                       setWizFundingAccountId("");
-                      setWizTargetAccountId("");
-                      setWizLiabilityType("credit_card");
+                      setWizLiabilityType("card");
                       setWizCurrentBalance("");
                       setWizInterestRate("");
                       setWizHasCreditLimit(false);
@@ -1498,7 +1462,6 @@ export const OnboardingWizard: React.FC = () => {
                         >
                           <option value="">Select cash asset account</option>
                           {wizAccounts
-                            .filter((a) => a.type !== "credit-card")
                             .map((acc) => (
                               <option key={acc.id} value={acc.id}>
                                 {acc.name} ($
@@ -1696,7 +1659,7 @@ export const OnboardingWizard: React.FC = () => {
                           $
                           {wizAccounts
                             .reduce(
-                              (acc, a) => (a.type === "credit-card" ? acc - a.balance : acc + a.balance),
+                              (acc, a) => acc + a.balance,
                               0
                             )
                             .toLocaleString("en-US", {
