@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 
 import { AnimatePresence } from "motion/react";
 import {
@@ -70,8 +71,8 @@ function MainAppLayout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           {/* Logo & branding */}
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-900 border border-white/10 shadow-sm text-indigo-400 shrink-0">
-              <CalendarIcon className="w-5 h-5" />
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-900 border border-white/10 shadow-sm shrink-0">
+              <Image src="/icon-mark.png" alt="" width={96} height={96} className="w-6 h-6" />
             </div>
             <div>
               <h1 className="text-sm font-bold text-white tracking-tight leading-none">Financial OS</h1>
