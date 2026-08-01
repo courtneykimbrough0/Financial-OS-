@@ -208,7 +208,7 @@ export const OnboardingWizard: React.FC = () => {
                 <div>
                   <h4 className="text-sm font-bold text-white">1. Add Your Accounts</h4>
                   <p className="text-[11px] text-zinc-400">
-                    Establish your checking, savings, or credit cards.
+                    Establish your checking, savings, or other accounts.
                   </p>
                 </div>
 
