@@ -4,7 +4,6 @@ import React from "react";
 import { motion } from "motion/react";
 import {
   Clock,
-  Zap,
   Plus,
   DollarSign,
   Calendar as CalendarIcon,
@@ -23,7 +22,6 @@ import {
 export const LiabilitiesTab: React.FC = () => {
   const {
     categorizedTransactions,
-    setIsPayoffPlannerOpen,
     setFormCategory,
     setIsAddingTransaction,
     setSelectedDetailTransaction,
@@ -52,14 +50,6 @@ export const LiabilitiesTab: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={() => setIsPayoffPlannerOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/20 border border-amber-500/40 text-amber-300 font-bold text-xs hover:from-amber-500/30 hover:to-amber-600/30 transition-all shadow-md shadow-amber-950/30 cursor-pointer"
-          >
-            <Zap className="w-4 h-4 text-amber-400" />
-            <span>Payoff Strategy Planner</span>
-          </button>
-
           <button
             onClick={() => {
               setFormCategory("liability");
