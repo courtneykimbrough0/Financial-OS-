@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   TrendingUp,
   Clock,
-  Zap,
   DollarSign,
   Percent,
   Info,
@@ -61,7 +60,6 @@ export const Dashboard: React.FC = () => {
     lowBalanceAlerts,
     initialBalance,
     calendarForecastTimeline,
-    setIsPayoffPlannerOpen,
   } = useFinancialData();
 
 

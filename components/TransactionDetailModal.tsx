@@ -8,7 +8,6 @@ import {
   Target,
   Clock,
   X,
-  Zap,
   CheckCircle2,
   Calendar as CalendarIcon,
   AlertTriangle,
@@ -31,7 +30,6 @@ export const TransactionDetailModal: React.FC = () => {
     setConfirmDialog,
     deleteTransactionById,
     setSelectedDay,
-    setIsPayoffPlannerOpen,
   } = useFinancialData();
 
   if (!selectedDetailTransaction) return null;
@@ -308,19 +306,6 @@ export const TransactionDetailModal: React.FC = () => {
                 Remove
               </button>
             </div>
-            {isLia && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsPayoffPlannerOpen(true);
-                  setSelectedDetailTransaction(null);
-                }}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/20 border border-amber-500/40 text-amber-300 font-bold text-xs hover:from-amber-500/30 hover:to-amber-600/30 transition-all flex items-center justify-center gap-1.5 shadow-md shadow-amber-950/30 cursor-pointer"
-              >
-                <Zap className="w-4 h-4 text-amber-400" />
-                <span>Planner</span>
-              </button>
-            )}
           </div>
         </motion.div>
       </div>
