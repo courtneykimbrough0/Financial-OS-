@@ -566,7 +566,14 @@ export const Dashboard: React.FC = () => {
                                   }`}
                                 />
                                 <div>
-                                  <div className="text-xs font-bold text-zinc-200">{t.item.title}</div>
+                                  <div className="text-xs font-bold text-zinc-200">
+                                    {t.item.title}
+                                    {t.splitLabel && (
+                                      <span className="ml-1 text-[9px] font-mono font-normal text-violet-400">
+                                        ({t.splitLabel})
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="flex items-center gap-1.5 mt-0.5">
                                     <span
                                       className={`text-[9px] font-bold font-mono tracking-wider px-1.5 py-0.5 rounded border ${catColorClass}`}
