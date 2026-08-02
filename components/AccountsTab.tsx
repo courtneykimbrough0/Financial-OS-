@@ -38,7 +38,7 @@ export const AccountsTab: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2.5">
-            <span className="text-xs font-bold text-zinc-400 font-mono">Net Starting Assets:</span>
+            <span className="text-xs font-bold text-zinc-400 font-mono">Starting Balance:</span>
             <span
               className={`text-sm font-bold font-mono ${
                 initialBalance >= 0 ? "text-emerald-400" : "text-amber-400"

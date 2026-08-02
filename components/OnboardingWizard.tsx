@@ -1149,7 +1149,7 @@ export const OnboardingWizard: React.FC = () => {
 
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                        Interest Rate (APR %)
+                        Interest Rate (%)
                       </label>
                       <input
                         type="number"
