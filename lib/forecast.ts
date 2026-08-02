@@ -864,6 +864,11 @@ export function generateForecast({
               if (targetAccId && currentBalances[targetAccId] !== undefined) {
                 currentBalances[targetAccId] = Math.max(0, currentBalances[targetAccId] - amt);
               }
+              // Track liability's own running balance independently of the cash-account
+              // mirror so it can be exposed through accountBalances for the health view.
+              // Does not touch currentBalances — cash numbers are unaffected.
+              const liabilityApplied = Math.min(amt, Math.max(0, liabilityBalances[t.id]));
+              liabilityBalances[t.id] = Math.max(0, liabilityBalances[t.id] - liabilityApplied);
             }
           } else if (t.category === 'savings') {
             // Transfer from checking to savings
@@ -943,6 +948,12 @@ export function generateForecast({
             const appliedAmt = Math.min(amt, Math.max(0, owed));
             if (fundAccId && currentBalances[fundAccId] !== undefined) currentBalances[fundAccId] -= appliedAmt;
             if (targetAccId && currentBalances[targetAccId] !== undefined) currentBalances[targetAccId] = Math.max(0, currentBalances[targetAccId] - amt);
+            // Same independent liability-balance tracking as the main loop's
+            // non-accrual branch (line ~870) — a split part against a
+            // zero/unset-interest liability must still update the balance
+            // exposed to the health view, without touching currentBalances.
+            const liabilityApplied = Math.min(amt, Math.max(0, liabilityBalances[t.id]));
+            liabilityBalances[t.id] = Math.max(0, liabilityBalances[t.id] - liabilityApplied);
           }
         } else if (t.category === 'savings') {
           const fundAccId = t.fundingAccountId;
@@ -975,15 +986,17 @@ export function generateForecast({
       totalStartCashSum += bal;
     }
     
-    // Surface each interest-accruing liability's running balance under its own
-    // transaction id, in addition to any targetAccountId it's already mirrored
-    // into above. accountBalances stays a Record<string, number> (no shape
-    // change) — this only adds new keys, and only for liabilities using the
-    // new daily-accrual path, so non-interest-bearing liabilities and callers
-    // that only look up known account ids are unaffected.
+    // Surface every liability's running balance under its own transaction id,
+    // in addition to any targetAccountId it's already mirrored into above.
+    // accountBalances stays a Record<string, number> (no shape change) — this
+    // only adds new keys, so callers that only look up known account ids are
+    // unaffected.
     const exposedBalances = { ...currentBalances };
     for (const t of transactions) {
-      if (t.category === 'liability' && useInterestAccrual[t.id]) {
+      // Expose every liability that has a tracked balance — not just interest-accruing
+      // ones. Cash-account keys are already in exposedBalances; liability ids are new
+      // keys that the health view reads to compute available-credit trajectories.
+      if (t.category === 'liability' && t.currentBalance !== undefined) {
         exposedBalances[t.id] = liabilityBalances[t.id];
       }
     }
