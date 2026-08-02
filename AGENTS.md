@@ -43,3 +43,7 @@ The app has no backend yet in most respects: data lives in browser `localStorage
 ## Workflow
 
 Work is tracked as GitHub Issues, one per unit of work, with acceptance criteria and file/line pointers. To pick up a task: branch off `main`, implement against the issue's acceptance criteria, verify `bun run build` and `bun run lint` pass clean, push the branch, and open a PR against `main` with `Closes #<issue>` in the description. Don't merge your own PR — leave it for review.
+
+## Agent roles
+
+`.claude/agents/` defines the specific roles working on this project (Senior Engineer, Implementer, DB Engineer) — what each owns, what it must never do, and where to look for current state instead of relying on chat history. If you're starting a new session in one of these roles, read the matching file there first, regardless of which tool you are.
