@@ -77,21 +77,24 @@ interface AccountHealth {
 
 function computeHealth(acc: Account, timeline: ForecastDay[]): AccountHealth {
   const relevant = timeline.filter((d) => d.accountBalances[acc.id] !== undefined);
+
+  // Always use the stored account balance as "current" — the engine's day-0 ending
+  // balance already includes today's projected transactions, which haven't cleared yet.
+  const currentBalance = acc.balance;
+
   if (relevant.length === 0) {
     return {
       account: acc,
-      currentBalance: acc.balance,
-      troughBalance: acc.balance,
+      currentBalance,
+      troughBalance: currentBalance,
       troughDateStr: "",
       nextDepositAmount: null,
       nextDepositDateStr: null,
-      signal: acc.balance >= BUFFER ? "green" : acc.balance >= 0 ? "amber" : "red",
+      signal: currentBalance >= BUFFER ? "green" : currentBalance >= 0 ? "amber" : "red",
     };
   }
 
-  const currentBalance = relevant[0].accountBalances[acc.id];
-
-  // Trough: lowest projected balance across the window
+  // Trough: lowest projected end-of-day balance across the entire window
   let troughBalance = currentBalance;
   let troughDateStr = relevant[0].dateStr;
   for (const day of relevant) {
@@ -149,7 +152,7 @@ function buildDrillDown(acc: Account, timeline: ForecastDay[]): DayEntry[] {
       }
       return { dateStr: day.dateStr, items, closingBalance: day.accountBalances[acc.id] };
     })
-    .filter((d) => d.items.length > 0 || d.closingBalance !== undefined);
+    .filter((d) => d.items.length > 0);
 }
 
 // ─── strip row ────────────────────────────────────────────────────────────────
