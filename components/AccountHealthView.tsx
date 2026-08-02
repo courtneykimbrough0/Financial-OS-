@@ -16,7 +16,7 @@ import {
   Circle,
 } from "lucide-react";
 import { useFinancialData } from "./FinancialOSContext";
-import { Account, ForecastDay, RecurringTransaction } from "@/lib/forecast";
+import { Account, ForecastDay, RecurringTransaction, formatDateLocal } from "@/lib/forecast";
 
 const BUFFER = 100; // $100 amber threshold for both cash and available-credit signals
 
@@ -77,7 +77,14 @@ interface AccountHealth {
 }
 
 function computeHealth(acc: Account, timeline: ForecastDay[]): AccountHealth {
-  const relevant = timeline.filter((d) => d.accountBalances[acc.id] !== undefined);
+  // calendarForecastTimeline starts from the 1st of whatever month is being
+  // viewed, which is frequently in the past relative to today (e.g. viewing
+  // the current month on the 15th) — bound to today-forward so a dip that
+  // already resolved can't get reported as the current trough.
+  const todayStr = formatDateLocal(new Date());
+  const relevant = timeline.filter(
+    (d) => d.accountBalances[acc.id] !== undefined && d.dateStr >= todayStr
+  );
   const currentBalance = acc.balance;
 
   if (relevant.length === 0) {
@@ -189,7 +196,11 @@ function computeCreditHealth(tx: RecurringTransaction, timeline: ForecastDay[]):
   const limit = tx.creditLimit ?? 0;
   const currentAvailable = limit - (tx.currentBalance ?? 0);
 
-  const relevant = timeline.filter((d) => d.accountBalances[tx.id] !== undefined);
+  // Same today-forward bound as computeHealth() — see its comment.
+  const todayStr = formatDateLocal(new Date());
+  const relevant = timeline.filter(
+    (d) => d.accountBalances[tx.id] !== undefined && d.dateStr >= todayStr
+  );
 
   if (relevant.length === 0 || limit === 0) {
     const signal: CreditHealth["signal"] =
