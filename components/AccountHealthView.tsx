@@ -94,17 +94,6 @@ function computeHealth(acc: Account, timeline: ForecastDay[]): AccountHealth {
     };
   }
 
-  // Trough: lowest projected end-of-day balance across the entire window
-  let troughBalance = currentBalance;
-  let troughDateStr = relevant[0].dateStr;
-  for (const day of relevant) {
-    const bal = day.accountBalances[acc.id];
-    if (bal < troughBalance) {
-      troughBalance = bal;
-      troughDateStr = day.dateStr;
-    }
-  }
-
   // Next deposit into this account
   let nextDepositAmount: number | null = null;
   let nextDepositDateStr: string | null = null;
@@ -118,6 +107,25 @@ function computeHealth(acc: Account, timeline: ForecastDay[]): AccountHealth {
       }
     }
     if (nextDepositDateStr) break;
+  }
+
+  // Trough: lowest projected end-of-day balance between now and the next
+  // deposit (matches the issue's "before the next incoming deposit" spec —
+  // `relevant` spans the full ~3-month calendarForecastTimeline window, so
+  // scanning the whole thing would surface a dip months away and mislabel it
+  // as the near-term outlook). Falls back to the full window if no deposit
+  // is scheduled within it at all.
+  const troughWindow = nextDepositDateStr
+    ? relevant.filter((d) => d.dateStr <= nextDepositDateStr)
+    : relevant;
+  let troughBalance = currentBalance;
+  let troughDateStr = troughWindow[0]?.dateStr ?? relevant[0].dateStr;
+  for (const day of troughWindow) {
+    const bal = day.accountBalances[acc.id];
+    if (bal < troughBalance) {
+      troughBalance = bal;
+      troughDateStr = day.dateStr;
+    }
   }
 
   const signal: AccountHealth["signal"] =
