@@ -281,6 +281,35 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* LEFT TO SPEND — persistent across both Calendar and Flow tabs */}
+      <div className="bg-zinc-900/40 border border-white/8 rounded-2xl px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
+        <div className="flex flex-col gap-0.5 shrink-0">
+          <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-500 uppercase">
+            Left to Spend
+          </span>
+          <span
+            className={`text-3xl font-black font-mono tabular-nums leading-none ${
+              activeMetrics.spending < 0
+                ? "text-red-400"
+                : activeMetrics.spending < 100
+                ? "text-amber-400"
+                : "text-emerald-400"
+            }`}
+          >
+            $
+            {activeMetrics.spending.toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </span>
+        </div>
+        <div className="hidden sm:block w-px h-10 bg-white/8 shrink-0" />
+        <p className="text-xs text-zinc-500 leading-relaxed max-w-sm">
+          Income minus all scheduled bills, liabilities, and savings transfers for the selected
+          period — everything after your planned items, free to spend.
+        </p>
+      </div>
+
       {/* DYNAMIC CALENDAR DISPLAY (Absolute focal point of page) */}
       {dashboardViewMode === "calendar" && (
         <div className="bg-zinc-900/30 border border-white/10 rounded-[2rem] p-4 sm:p-6 flex flex-col gap-4">
@@ -294,7 +323,7 @@ export const Dashboard: React.FC = () => {
             {/* Compact Top-Right aligned KPIs */}
             <div className="flex items-center gap-4 sm:gap-6 text-xs font-mono shrink-0 select-none">
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="text-zinc-400 font-medium text-[10px] sm:text-xs">Spend:</span>
+                <span className="text-zinc-400 font-medium text-[10px] sm:text-xs">Left to Spend:</span>
                 <span className="text-indigo-400 font-bold sm:text-sm whitespace-nowrap">
                   $
                   {activeMetrics.spending.toLocaleString("en-US", {

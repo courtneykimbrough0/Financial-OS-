@@ -203,8 +203,21 @@ export const OnboardingWizard: React.FC = () => {
             <motion.div
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
-              className="grid grid-cols-1 lg:grid-cols-12 gap-6"
+              className="flex flex-col gap-5"
             >
+              {/* Product framing — shown once at the very start */}
+              <div className="bg-indigo-500/8 border border-indigo-500/20 rounded-2xl px-5 py-4">
+                <p className="text-sm font-semibold text-indigo-200 leading-snug">
+                  Financial OS forecasts your recurring bills, income, and planned one-time expenses
+                  — it doesn&apos;t track every purchase.
+                </p>
+                <p className="text-xs text-indigo-300/70 mt-1.5 leading-relaxed">
+                  Tell it what&apos;s scheduled, and it shows you what&apos;s left to spend freely — before
+                  the next bill hits.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Add Account Inline Form */}
               <div className="lg:col-span-5 bg-zinc-950/40 border border-white/5 p-5 rounded-2xl flex flex-col gap-4">
                 <div>
@@ -441,6 +454,7 @@ export const OnboardingWizard: React.FC = () => {
                   </button>
                 </div>
               </div>
+              </div>{/* end grid wrapper */}
             </motion.div>
           )}
 
@@ -706,7 +720,7 @@ export const OnboardingWizard: React.FC = () => {
                     onClick={() => {
                       if (wizTransactions.filter((t) => t.category === "income").length === 0) {
                         setWizError(
-                          "We highly recommend adding at least one regular income payload to build an available spend margin."
+                          "We highly recommend adding at least one regular income source so the forecast can show what's left to spend."
                         );
                       }
                       setWizActiveStep(2);
