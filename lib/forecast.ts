@@ -8,8 +8,10 @@ export interface TransactionOverride {
   id: string;
   transactionId: string;
   dateStr: string;
-  status: 'verified' | 'skipped' | 'modified';
+  status: 'verified' | 'skipped' | 'modified' | 'split';
   customAmount?: number;
+  // Populated when status === 'split'; each entry is one sub-payment landing on its own date.
+  splits?: { id: string; amount: number; dateStr: string }[];
 }
 
 export interface Account {
@@ -57,8 +59,10 @@ export interface ForecastDay {
   transactions: {
     item: RecurringTransaction;
     amount: number;
-    status?: 'verified' | 'skipped' | 'modified';
+    status?: 'verified' | 'skipped' | 'modified' | 'split';
     overrideId?: string;
+    // Set when this entry is one part of a split payment: e.g. "2 of 3"
+    splitLabel?: string;
   }[];
   accountBalances: Record<string, number>; // Individual account balances at the end of the day
 }
@@ -733,14 +737,38 @@ export function generateForecast({
     }
   }
 
+  // Build a date-keyed index of split sub-payments so the day loop can find
+  // them in O(1) without scanning all overrides every iteration.
+  const splitsByDate = new Map<string, Array<{
+    tx: RecurringTransaction;
+    amount: number;
+    overrideId: string;
+    partNum: number;
+    totalParts: number;
+  }>>();
+  for (const override of overrides) {
+    if (override.status === 'split' && override.splits && override.splits.length > 0) {
+      const tx = transactions.find(t => t.id === override.transactionId);
+      if (!tx) continue;
+      const totalParts = override.splits.length;
+      for (let i = 0; i < override.splits.length; i++) {
+        const split = override.splits[i];
+        const parts = splitsByDate.get(split.dateStr) ?? [];
+        parts.push({ tx, amount: split.amount, overrideId: override.id, partNum: i + 1, totalParts });
+        splitsByDate.set(split.dateStr, parts);
+      }
+    }
+  }
+
   for (const day of days) {
     let incoming = 0;
     let outgoing = 0;
     const dayTransactions: {
       item: RecurringTransaction;
       amount: number;
-      status?: 'verified' | 'skipped' | 'modified';
+      status?: 'verified' | 'skipped' | 'modified' | 'split';
       overrideId?: string;
+      splitLabel?: string;
     }[] = [];
     
     const dayStr = formatDateLocal(day);
@@ -775,6 +803,10 @@ export function generateForecast({
         
         if (override && override.status === 'skipped') {
           continue; // Skip this transaction instance completely on this day
+        }
+
+        if (override && override.status === 'split' && override.splits && override.splits.length > 0) {
+          continue; // Occurrence is replaced by split sub-payments at their own dates
         }
         
         let amt = t.amount;
@@ -868,7 +900,72 @@ export function generateForecast({
         }
       }
     }
-    
+
+    // Process any split sub-payments whose date_str falls on this day.
+    // Each part goes through the same category routing as a normal occurrence.
+    const splitsToday = splitsByDate.get(dayStr);
+    if (splitsToday) {
+      for (const part of splitsToday) {
+        const t = part.tx;
+        const amt = part.amount;
+        const splitLabel = `${part.partNum} of ${part.totalParts}`;
+
+        if (t.category === 'income') {
+          incoming += amt;
+          dayTransactions.push({
+            item: t,
+            amount: amt,
+            overrideId: part.overrideId,
+            splitLabel,
+          });
+
+          const accId = t.accountId;
+          if (accId && currentBalances[accId] !== undefined) {
+            currentBalances[accId] += amt;
+          }
+          continue;
+        }
+
+        outgoing += amt;
+        dayTransactions.push({
+          item: t,
+          amount: -amt,
+          overrideId: part.overrideId,
+          splitLabel,
+        });
+
+        if (t.category === 'liability') {
+          const targetAccId = t.targetAccountId;
+          const fundAccId = t.fundingAccountId;
+          if (useInterestAccrual[t.id]) {
+            const bal = liabilityBalances[t.id];
+            const appliedAmt = Math.min(amt, Math.max(0, bal));
+            liabilityBalances[t.id] = Math.max(0, bal - appliedAmt);
+            if (fundAccId && currentBalances[fundAccId] !== undefined) currentBalances[fundAccId] -= appliedAmt;
+            if (targetAccId && currentBalances[targetAccId] !== undefined) currentBalances[targetAccId] = liabilityBalances[t.id];
+          } else {
+            const owed = targetAccId ? (currentBalances[targetAccId] ?? amt) : amt;
+            const appliedAmt = Math.min(amt, Math.max(0, owed));
+            if (fundAccId && currentBalances[fundAccId] !== undefined) currentBalances[fundAccId] -= appliedAmt;
+            if (targetAccId && currentBalances[targetAccId] !== undefined) currentBalances[targetAccId] = Math.max(0, currentBalances[targetAccId] - amt);
+          }
+        } else if (t.category === 'savings') {
+          const fundAccId = t.fundingAccountId;
+          if (fundAccId && currentBalances[fundAccId] !== undefined) currentBalances[fundAccId] -= amt;
+          const targetAccId = t.targetAccountId;
+          if (targetAccId && currentBalances[targetAccId] !== undefined) currentBalances[targetAccId] += amt;
+        } else if (t.category === 'transfer') {
+          const fundAccId = t.fundingAccountId;
+          if (fundAccId && currentBalances[fundAccId] !== undefined) currentBalances[fundAccId] -= amt;
+          const targetAccId = t.targetAccountId;
+          if (targetAccId && currentBalances[targetAccId] !== undefined) currentBalances[targetAccId] += amt;
+        } else {
+          const accId = t.accountId;
+          if (accId && currentBalances[accId] !== undefined) currentBalances[accId] -= amt;
+        }
+      }
+    }
+
     // Net cash total is sum of cash accounts
     let totalCashSum = 0;
     for (const acc of activeAccounts) {

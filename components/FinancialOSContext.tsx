@@ -27,6 +27,7 @@ import {
   fetchOverrides,
   upsertOverride,
   deleteOverride,
+  upsertSplitOverride,
 } from "@/lib/data/overrides";
 import {
   fetchUserSettings,
@@ -147,6 +148,7 @@ interface FinancialOSContextType {
   toggleVerifyOverride: (transactionId: string, dateStr: string) => Promise<void>;
   skipOverride: (transactionId: string, dateStr: string) => Promise<void>;
   modifyAmountOverride: (transactionId: string, dateStr: string, customAmt: number) => Promise<void>;
+  createSplitPayment: (transactionId: string, dueDateStr: string, parts: { amount: number; dateStr: string }[]) => Promise<boolean>;
   updateLaunchDateInDb: (newDate: string) => Promise<boolean>;
   completeOnboarding: (
     wizAccs: Account[],
@@ -758,6 +760,46 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   };
 
+  const createSplitPayment = async (
+    transactionId: string,
+    dueDateStr: string,
+    parts: { amount: number; dateStr: string }[]
+  ): Promise<boolean> => {
+    if (!userId) return false;
+
+    const previousOverrides = [...transactionOverrides];
+    try {
+      const saved = await upsertSplitOverride(supabase, transactionId, dueDateStr, parts, userId);
+
+      setTransactionOverrides((prev) => {
+        const without = prev.filter(
+          (o) => !(o.transactionId === transactionId && o.dateStr === dueDateStr)
+        );
+        return [...without, saved];
+      });
+
+      if (selectedDay) {
+        const activeTimeline = generateForecast({
+          startDate: parseDateLocal(launchDateStr),
+          numberOfDays: 120,
+          accounts,
+          transactions,
+          overrides: [...previousOverrides.filter(
+            (o) => !(o.transactionId === transactionId && o.dateStr === dueDateStr)
+          ), saved],
+        });
+        const updatedDay = activeTimeline.find((d) => d.dateStr === selectedDay.dateStr);
+        setSelectedDay(updatedDay || null);
+      }
+
+      return true;
+    } catch (err: any) {
+      setTransactionOverrides(previousOverrides);
+      setAlertMessage(err.message || "Failed to save split payment.");
+      return false;
+    }
+  };
+
   const updateLaunchDateInDb = async (newDate: string): Promise<boolean> => {
     if (!userId) return false;
     setIsSaving(true);
@@ -1000,6 +1042,7 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
         toggleVerifyOverride,
         skipOverride,
         modifyAmountOverride,
+        createSplitPayment,
         updateLaunchDateInDb,
         completeOnboarding,
         handleClearAllData,
