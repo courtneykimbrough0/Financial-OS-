@@ -222,8 +222,10 @@ export const DayDetailModal: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Inline Modification Input */}
-                      {isEditing ? (
+                      {/* Split sub-payments can't yet be individually verified/skipped/modified —
+                          those controls operate on an override keyed to this row's own date, which
+                          the forecast engine never reads for split parts, so they'd be silent no-ops. */}
+                      {!t.splitLabel && (isEditing ? (
                         <div className="flex items-center gap-2 mt-1 bg-zinc-950/40 p-1.5 rounded-xl border border-white/5">
                           <span className="text-[10px] font-mono text-zinc-400 pl-1.5">$</span>
                           <input
@@ -293,7 +295,7 @@ export const DayDetailModal: React.FC = () => {
                             <span>Skip</span>
                           </button>
                         </div>
-                      )}
+                      ))}
                     </div>
                   );
                 })}

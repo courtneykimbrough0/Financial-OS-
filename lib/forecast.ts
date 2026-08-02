@@ -805,7 +805,7 @@ export function generateForecast({
           continue; // Skip this transaction instance completely on this day
         }
 
-        if (override && override.status === 'split') {
+        if (override && override.status === 'split' && override.splits && override.splits.length > 0) {
           continue; // Occurrence is replaced by split sub-payments at their own dates
         }
         
@@ -904,6 +904,22 @@ export function generateForecast({
         const t = part.tx;
         const amt = part.amount;
         const splitLabel = `${part.partNum} of ${part.totalParts}`;
+
+        if (t.category === 'income') {
+          incoming += amt;
+          dayTransactions.push({
+            item: t,
+            amount: amt,
+            overrideId: part.overrideId,
+            splitLabel,
+          });
+
+          const accId = t.accountId;
+          if (accId && currentBalances[accId] !== undefined) {
+            currentBalances[accId] += amt;
+          }
+          continue;
+        }
 
         outgoing += amt;
         dayTransactions.push({
