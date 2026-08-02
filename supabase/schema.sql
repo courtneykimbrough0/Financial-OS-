@@ -105,7 +105,7 @@ create table if not exists public.transaction_overrides (
   user_id uuid not null references auth.users (id) on delete cascade,
   transaction_id uuid not null references public.transactions (id) on delete cascade,
   date_str date not null,
-  status text not null check (status in ('verified', 'skipped', 'modified')),
+  status text not null check (status in ('verified', 'skipped', 'modified', 'split')),
   custom_amount numeric,
   created_at timestamptz not null default now(),
 
@@ -124,6 +124,33 @@ create policy "overrides_insert_own" on public.transaction_overrides
 create policy "overrides_update_own" on public.transaction_overrides
   for update using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create policy "overrides_delete_own" on public.transaction_overrides
+  for delete using ((select auth.uid()) = user_id);
+
+-- ---------------------------------------------------------------------------
+-- transaction_override_splits — sub-payments for a split override row
+-- ---------------------------------------------------------------------------
+create table if not exists public.transaction_override_splits (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  override_id uuid not null references public.transaction_overrides (id) on delete cascade,
+  amount numeric not null,
+  date_str date not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists transaction_override_splits_user_id_idx on public.transaction_override_splits (user_id);
+create index if not exists transaction_override_splits_date_idx on public.transaction_override_splits (date_str);
+create index if not exists transaction_override_splits_override_id_idx on public.transaction_override_splits (override_id);
+
+alter table public.transaction_override_splits enable row level security;
+
+create policy "override_splits_select_own" on public.transaction_override_splits
+  for select using ((select auth.uid()) = user_id);
+create policy "override_splits_insert_own" on public.transaction_override_splits
+  for insert with check ((select auth.uid()) = user_id);
+create policy "override_splits_update_own" on public.transaction_override_splits
+  for update using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "override_splits_delete_own" on public.transaction_override_splits
   for delete using ((select auth.uid()) = user_id);
 
 -- ---------------------------------------------------------------------------
