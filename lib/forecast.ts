@@ -832,6 +832,11 @@ export function generateForecast({
               if (targetAccId && currentBalances[targetAccId] !== undefined) {
                 currentBalances[targetAccId] = Math.max(0, currentBalances[targetAccId] - amt);
               }
+              // Track liability's own running balance independently of the cash-account
+              // mirror so it can be exposed through accountBalances for the health view.
+              // Does not touch currentBalances — cash numbers are unaffected.
+              const liabilityApplied = Math.min(amt, Math.max(0, liabilityBalances[t.id]));
+              liabilityBalances[t.id] = Math.max(0, liabilityBalances[t.id] - liabilityApplied);
             }
           } else if (t.category === 'savings') {
             // Transfer from checking to savings
@@ -886,7 +891,10 @@ export function generateForecast({
     // that only look up known account ids are unaffected.
     const exposedBalances = { ...currentBalances };
     for (const t of transactions) {
-      if (t.category === 'liability' && useInterestAccrual[t.id]) {
+      // Expose every liability that has a tracked balance — not just interest-accruing
+      // ones. Cash-account keys are already in exposedBalances; liability ids are new
+      // keys that the health view reads to compute available-credit trajectories.
+      if (t.category === 'liability' && t.currentBalance !== undefined) {
         exposedBalances[t.id] = liabilityBalances[t.id];
       }
     }
