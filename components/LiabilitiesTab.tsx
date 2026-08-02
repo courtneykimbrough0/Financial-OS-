@@ -102,7 +102,7 @@ export const LiabilitiesTab: React.FC = () => {
               <Percent className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-[10px] font-mono text-zinc-400 uppercase">Avg. Interest Rate</div>
+              <div className="text-[10px] font-mono text-zinc-400 uppercase">Average Interest Rate</div>
               <div className="text-base font-bold font-mono text-zinc-200">
                 {(() => {
                   const activeLias = liabilities.filter((t) => (t.currentBalance || 0) > 0);
@@ -114,7 +114,7 @@ export const LiabilitiesTab: React.FC = () => {
                       (acc, t) => acc + (t.currentBalance || 0) * (t.interestRate || 0),
                       0
                     ) / totalBal;
-                  return `${weightedApr.toFixed(1)}% APR`;
+                  return `${weightedApr.toFixed(1)}%`;
                 })()}
               </div>
             </div>
@@ -128,8 +128,7 @@ export const LiabilitiesTab: React.FC = () => {
           <Clock className="w-12 h-12 text-zinc-500 mb-3" />
           <p className="text-sm font-bold text-white">No Recurring Liabilities Registered</p>
           <p className="text-xs text-zinc-300 max-w-xs mt-1">
-            Track cards, loans, lines of credit, or one-time liabilities with interest accrual
-            and payoff timelines.
+            Track what you owe and when it&apos;ll be paid off.
           </p>
         </div>
       ) : (
@@ -200,7 +199,7 @@ export const LiabilitiesTab: React.FC = () => {
                       </span>
                     ) : (
                       <span className="text-[10px] font-mono font-bold text-orange-400 bg-orange-500/15 border border-orange-500/30 px-2.5 py-0.5 rounded-lg">
-                        Neg. Amort.
+                        Balance Growing
                       </span>
                     )}
                   </div>

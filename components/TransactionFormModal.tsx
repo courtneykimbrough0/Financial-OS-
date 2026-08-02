@@ -1122,7 +1122,7 @@ export const TransactionFormModal: React.FC = () => {
                     {/* APR */}
                     <div>
                       <label className="block text-xs font-medium text-zinc-300 mb-1.5">
-                        Annual Percentage Rate *
+                        Interest Rate (%) *
                       </label>
                       <div className="relative">
                         <input
@@ -1197,13 +1197,13 @@ export const TransactionFormModal: React.FC = () => {
                             }}
                             className="w-4 h-4 rounded border-white/20 bg-zinc-900 text-amber-500 focus:ring-amber-500/20 cursor-pointer"
                           />
-                          <span>Has balance transfer fee</span>
+                          <span>Has transfer fee</span>
                         </label>
                         {formHasBalanceTransferFee && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 pl-6">
                             <div>
                               <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                Balance transfer fee *
+                                Transfer fee *
                               </label>
                               <div className="relative">
                                 <input
@@ -1222,7 +1222,7 @@ export const TransactionFormModal: React.FC = () => {
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                Balance transfer fee minimum *
+                                Minimum transfer fee *
                               </label>
                               <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-xs font-mono">
@@ -1338,7 +1338,7 @@ export const TransactionFormModal: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-xs font-medium text-zinc-300 mb-1.5">
-                        Minimum payment calculation
+                        How is the minimum payment calculated?
                       </label>
                       <select
                         value={formMinPaymentCalc}
@@ -1346,10 +1346,8 @@ export const TransactionFormModal: React.FC = () => {
                         className="block w-full px-3.5 py-2.5 text-xs bg-zinc-950 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 transition-colors cursor-pointer font-medium"
                       >
                         <option value="fixed">Fixed amount</option>
-                        <option value="percent_principal">Percent of principal</option>
-                        <option value="percent_principal_interest">
-                          Percent of principal + interest
-                        </option>
+                        <option value="percent_principal">% of balance</option>
+                        <option value="percent_principal_interest">% of balance + interest</option>
                       </select>
                     </div>
 

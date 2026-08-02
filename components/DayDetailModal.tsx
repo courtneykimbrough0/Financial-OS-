@@ -268,7 +268,7 @@ export const DayDetailModal: React.FC = () => {
                                 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
                                 : "bg-zinc-800/40 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-transparent"
                             }`}
-                            title="Mark as Cleared / Verified"
+                            title="Mark as Verified"
                           >
                             <Check className="w-3.5 h-3.5 text-emerald-400" />
                             <span>{t.status === "verified" ? "Verified" : "Verify"}</span>

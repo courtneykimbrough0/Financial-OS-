@@ -242,7 +242,7 @@ export const TransactionDetailModal: React.FC = () => {
                 ) : (
                   <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-xl text-center text-xs font-bold text-orange-400 flex items-center justify-center gap-1.5 animate-pulse">
                     <AlertTriangle className="w-4 h-4" />
-                    <span>Warning: Negative Amortization</span>
+                    <span>Your payments don&apos;t cover the interest — the balance is going up.</span>
                   </div>
                 )}
 
@@ -250,7 +250,7 @@ export const TransactionDetailModal: React.FC = () => {
                 {limit > 0 && (
                   <div className="space-y-1.5 p-3.5 bg-zinc-900/30 border border-white/5 rounded-xl">
                     <div className="flex justify-between text-[10px] font-mono">
-                      <span className="text-zinc-400">Credit Utilization</span>
+                      <span className="text-zinc-400">% of Limit Used</span>
                       <span
                         className={`font-bold ${
                           utilization > 70
@@ -300,21 +300,21 @@ export const TransactionDetailModal: React.FC = () => {
                 {tx.interestRate !== undefined && tx.interestRate > 0 && !isPaidOff && (
                   <div className="text-xs space-y-2 bg-amber-950/10 p-3.5 rounded-2xl border border-amber-500/15">
                     <div className="flex justify-between text-zinc-300">
-                      <span>Annual Rate:</span>
+                      <span>Interest Rate:</span>
                       <span className="font-mono font-bold text-amber-400">
-                        {tx.interestRate}% APR
+                        {tx.interestRate}%
                       </span>
                     </div>
                     <div className="flex justify-between text-zinc-300">
-                      <span>Daily Interest Volume:</span>
+                      <span>Interest per day:</span>
                       <span className="font-mono text-zinc-200">
-                        ${payoff.dailyInterestAccrual.toFixed(2)} / day
+                        ${payoff.dailyInterestAccrual.toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between text-zinc-300">
-                      <span>Monthly Interest Volume:</span>
+                      <span>Interest per month:</span>
                       <span className="font-mono text-zinc-200">
-                        ${payoff.monthlyInterestAccrual.toFixed(2)} / day
+                        ${payoff.monthlyInterestAccrual.toFixed(2)}
                       </span>
                     </div>
                     {payoff.monthsToPayoff !== null && (
