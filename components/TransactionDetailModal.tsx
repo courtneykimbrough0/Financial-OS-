@@ -21,6 +21,8 @@ import {
   getFrequencySubtext,
   RecurringTransaction,
   formatDateLocal,
+  parseDateLocal,
+  isTransactionOccurring,
 } from "@/lib/forecast";
 
 export const TransactionDetailModal: React.FC = () => {
@@ -97,8 +99,16 @@ export const TransactionDetailModal: React.FC = () => {
 
   const splitTotal = splitParts.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
   const splitRemainder = Math.round((tx.amount - splitTotal) * 100) / 100;
+  // The due date defaults to `selectedDay`, which isn't set on every path into
+  // this modal (e.g. opening a liability from LiabilitiesTab doesn't set it) —
+  // so it can land on a date this transaction was never actually due. Saving a
+  // split against a non-occurrence date wouldn't suppress anything (nothing to
+  // suppress there), silently producing an extra phantom payment instead of an
+  // actual split. Require it to be a real occurrence before allowing save.
+  const splitDueDateValid =
+    splitDueDate !== "" && isTransactionOccurring(parseDateLocal(splitDueDate), tx);
   const splitValid =
-    splitDueDate !== "" &&
+    splitDueDateValid &&
     splitParts.length >= 2 &&
     splitParts.every((p) => p.dateStr !== "" && parseFloat(p.amount) > 0) &&
     Math.abs(splitRemainder) < 0.01;
@@ -357,11 +367,21 @@ export const TransactionDetailModal: React.FC = () => {
                     type="date"
                     value={splitDueDate}
                     onChange={(e) => setSplitDueDate(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-white/30"
+                    className={`w-full bg-black/40 border rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none ${
+                      splitDueDate !== "" && !splitDueDateValid
+                        ? "border-red-500/50 focus:border-red-500/70"
+                        : "border-white/10 focus:border-white/30"
+                    }`}
                   />
-                  <p className="text-[9px] text-zinc-600 font-mono">
-                    The occurrence date that will be replaced by these sub-payments.
-                  </p>
+                  {splitDueDate !== "" && !splitDueDateValid ? (
+                    <p className="text-[9px] text-red-400 font-mono">
+                      This transaction isn&apos;t actually due on this date — pick the real due date being split.
+                    </p>
+                  ) : (
+                    <p className="text-[9px] text-zinc-600 font-mono">
+                      The occurrence date that will be replaced by these sub-payments.
+                    </p>
+                  )}
                 </div>
 
                 {/* Split parts */}
