@@ -47,6 +47,7 @@ export interface RecurringTransaction {
   promoEndDate?: string; // Promotional APR end date (YYYY-MM-DD)
   minimumPaymentCalc?: 'fixed' | 'percent_principal' | 'percent_principal_interest';
   dayOfMonth?: string; // Due day of month (e.g. "1".."31" or "Last")
+  endDate?: string; // Ending date (YYYY-MM-DD) when the recurring transaction stops occurring
 }
 
 export interface ForecastDay {
@@ -627,7 +628,7 @@ export function getFrequencySubtext(t: { amount: number; frequency: TransactionF
 // Check if a transaction occurs on a specific day
 export function isTransactionOccurring(
   day: Date,
-  transaction: Pick<RecurringTransaction, 'startDate' | 'frequency' | 'semiMonthlyDays'>
+  transaction: Pick<RecurringTransaction, 'startDate' | 'frequency' | 'semiMonthlyDays' | 'endDate'>
 ): boolean {
   const tStart = parseDateLocal(transaction.startDate);
   
@@ -636,6 +637,12 @@ export function isTransactionOccurring(
   const sTrunc = new Date(tStart.getFullYear(), tStart.getMonth(), tStart.getDate());
   
   if (dTrunc < sTrunc) return false; // Haven't started yet
+
+  if (transaction.endDate) {
+    const tEnd = parseDateLocal(transaction.endDate);
+    const eTrunc = new Date(tEnd.getFullYear(), tEnd.getMonth(), tEnd.getDate());
+    if (dTrunc > eTrunc) return false; // Already ended
+  }
   
   switch (transaction.frequency) {
     case 'onetime':

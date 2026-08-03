@@ -160,6 +160,8 @@ create table if not exists public.user_settings (
   user_id uuid primary key references auth.users (id) on delete cascade,
   launch_date date,
   onboarding_completed boolean not null default false,
+  current_balance numeric,
+  low_balance_alert numeric,
   updated_at timestamptz not null default now()
 );
 

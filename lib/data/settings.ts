@@ -4,6 +4,8 @@ export interface UserSettings {
   userId: string;
   launchDate: string | null;
   onboardingCompleted: boolean;
+  currentBalance: number | null;
+  lowBalanceAlert: number | null;
 }
 
 export function mapSettingsFromDb(row: any): UserSettings {
@@ -11,6 +13,8 @@ export function mapSettingsFromDb(row: any): UserSettings {
     userId: row.user_id,
     launchDate: row.launch_date,
     onboardingCompleted: row.onboarding_completed,
+    currentBalance: row.current_balance !== null && row.current_balance !== undefined ? Number(row.current_balance) : null,
+    lowBalanceAlert: row.low_balance_alert !== null && row.low_balance_alert !== undefined ? Number(row.low_balance_alert) : null,
   };
 }
 
@@ -74,6 +78,36 @@ export async function updateLaunchDate(
   const { error } = await supabase
     .from("user_settings")
     .update({ launch_date: launchDate })
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function updateCurrentBalance(
+  supabase: SupabaseClient,
+  userId: string,
+  value: number | null
+): Promise<void> {
+  const { error } = await supabase
+    .from("user_settings")
+    .update({ current_balance: value })
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function updateLowBalanceAlert(
+  supabase: SupabaseClient,
+  userId: string,
+  value: number | null
+): Promise<void> {
+  const { error } = await supabase
+    .from("user_settings")
+    .update({ low_balance_alert: value })
     .eq("user_id", userId);
 
   if (error) {

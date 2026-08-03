@@ -24,6 +24,7 @@ export function mapTransactionFromDb(row: any): RecurringTransaction {
     balanceTransferFeeMin: row.balance_transfer_fee_min !== null && row.balance_transfer_fee_min !== undefined ? Number(row.balance_transfer_fee_min) : undefined,
     promoRate: row.promo_rate !== null && row.promo_rate !== undefined ? Number(row.promo_rate) : undefined,
     promoEndDate: row.promo_end_date || undefined,
+    endDate: row.end_date || undefined,
     minimumPaymentCalc: row.minimum_payment_calc || undefined,
     dayOfMonth: row.day_of_month || undefined,
   };
@@ -56,6 +57,7 @@ export function mapTransactionToDb(
     balance_transfer_fee_min: tx.balanceTransferFeeMin !== undefined && tx.balanceTransferFeeMin !== null ? tx.balanceTransferFeeMin : null,
     promo_rate: tx.promoRate !== undefined && tx.promoRate !== null ? tx.promoRate : null,
     promo_end_date: tx.promoEndDate || null,
+    end_date: tx.endDate || null,
     minimum_payment_calc: tx.minimumPaymentCalc || null,
     day_of_month: tx.dayOfMonth || null,
   };
