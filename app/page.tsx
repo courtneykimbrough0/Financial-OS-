@@ -10,8 +10,6 @@ import {
   Clock,
   TrendingDown,
   Wallet,
-  LogOut,
-  Settings as SettingsIcon,
 } from "lucide-react";
 
 import { FinancialOSProvider, useFinancialData } from "@/components/FinancialOSContext";
@@ -22,6 +20,7 @@ import IncomeTab from "@/components/IncomeTab";
 import ExpensesSavingsTab from "@/components/ExpensesSavingsTab";
 import LiabilitiesTab from "@/components/LiabilitiesTab";
 import SettingsTab from "@/components/SettingsTab";
+import ProfileMenu from "@/components/ProfileMenu";
 
 // Dialog / Modal components
 import { ConfirmAlertDialogs } from "@/components/ConfirmAlertDialogs";
@@ -48,7 +47,6 @@ function MainAppLayout() {
     setActiveTab,
     setExpenseSubTab,
     categorizedTransactions,
-    signOut,
   } = useFinancialData();
 
   if (loading) {
@@ -154,30 +152,11 @@ function MainAppLayout() {
               <Clock className="w-3.5 h-3.5 text-amber-400" />
               <span>Liabilities ({categorizedTransactions.liabilities.length})</span>
             </button>
-
-            <button
-              onClick={() => setActiveTab("settings")}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all text-xs font-semibold cursor-pointer ${
-                activeTab === "settings"
-                  ? "bg-zinc-900 text-white border border-white/10 shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200 border border-transparent"
-              }`}
-            >
-              <SettingsIcon className="w-3.5 h-3.5 text-zinc-400" />
-              <span>Settings</span>
-            </button>
           </nav>
 
-          {/* Right Actions — Sign Out icon-only (visible on all breakpoints) */}
+          {/* Right Actions — Profile menu (Settings + Sign Out), visible on all breakpoints */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={signOut}
-              title="Sign Out"
-              aria-label="Sign Out"
-              className="flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-white/5 text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <ProfileMenu />
           </div>
         </div>
       </header>
