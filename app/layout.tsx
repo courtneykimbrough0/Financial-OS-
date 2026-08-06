@@ -1,6 +1,7 @@
 import type {Metadata, Viewport} from 'next';
 import { Sora, Outfit } from 'next/font/google';
 import './globals.css'; // Global styles
+import { ServiceWorkerUpdater } from '@/components/ServiceWorkerUpdater';
 
 const sora = Sora({
   subsets: ['latin'],
@@ -41,6 +42,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
         className={`${sora.variable} ${outfit.variable} font-sans antialiased bg-[#020203] text-zinc-100 min-h-full flex flex-col`}
         suppressHydrationWarning
       >
+        <ServiceWorkerUpdater />
         {children}
       </body>
     </html>
