@@ -11,6 +11,7 @@ import {
   TrendingDown,
   Wallet,
   LogOut,
+  Settings as SettingsIcon,
 } from "lucide-react";
 
 import { FinancialOSProvider, useFinancialData } from "@/components/FinancialOSContext";
@@ -20,6 +21,7 @@ import AccountsTab from "@/components/AccountsTab";
 import IncomeTab from "@/components/IncomeTab";
 import ExpensesSavingsTab from "@/components/ExpensesSavingsTab";
 import LiabilitiesTab from "@/components/LiabilitiesTab";
+import SettingsTab from "@/components/SettingsTab";
 
 // Dialog / Modal components
 import { ConfirmAlertDialogs } from "@/components/ConfirmAlertDialogs";
@@ -152,6 +154,18 @@ function MainAppLayout() {
               <Clock className="w-3.5 h-3.5 text-amber-400" />
               <span>Liabilities ({categorizedTransactions.liabilities.length})</span>
             </button>
+
+            <button
+              onClick={() => setActiveTab("settings")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all text-xs font-semibold cursor-pointer ${
+                activeTab === "settings"
+                  ? "bg-zinc-900 text-white border border-white/10 shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200 border border-transparent"
+              }`}
+            >
+              <SettingsIcon className="w-3.5 h-3.5 text-zinc-400" />
+              <span>Settings</span>
+            </button>
           </nav>
 
           {/* Right Actions — Sign Out icon-only (visible on all breakpoints) */}
@@ -179,6 +193,7 @@ function MainAppLayout() {
           {activeTab === "income" && <IncomeTab />}
           {activeTab === "expenses" && <ExpensesSavingsTab />}
           {activeTab === "liabilities" && <LiabilitiesTab />}
+          {activeTab === "settings" && <SettingsTab />}
         </AnimatePresence>
       </main>
 
