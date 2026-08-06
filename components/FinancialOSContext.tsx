@@ -34,6 +34,8 @@ import {
   createUserSettings,
   updateOnboardingCompleted,
   updateLaunchDate,
+  updateCurrentBalance,
+  updateLowBalanceAlert,
 } from "@/lib/data/settings";
 import { validateAccountInput, validateTransactionInput } from "@/lib/validation";
 
@@ -55,8 +57,12 @@ interface FinancialOSContextType {
   loading: boolean;
   isSaving: boolean;
 
+  // Settings
+  currentBalance: number | null;
+  lowBalanceAlert: number | null;
+
   // View Settings
-  activeTab: "dashboard" | "accounts" | "income" | "expenses" | "liabilities";
+  activeTab: "dashboard" | "accounts" | "income" | "expenses" | "liabilities" | "settings";
   expenseSubTab: "all" | "fixed" | "subscriptions" | "savings";
   isMobileMenuOpen: boolean;
   dashboardAccountFilter: string;
@@ -89,7 +95,7 @@ interface FinancialOSContextType {
   alertMessage: string | null;
 
   // State Setters
-  setActiveTab: React.Dispatch<React.SetStateAction<"dashboard" | "accounts" | "income" | "expenses" | "liabilities">>;
+  setActiveTab: React.Dispatch<React.SetStateAction<"dashboard" | "accounts" | "income" | "expenses" | "liabilities" | "settings">>;
   setExpenseSubTab: React.Dispatch<React.SetStateAction<"all" | "fixed" | "subscriptions" | "savings">>;
   setIsMobileMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setDashboardAccountFilter: React.Dispatch<React.SetStateAction<string>>;
@@ -150,6 +156,8 @@ interface FinancialOSContextType {
   modifyAmountOverride: (transactionId: string, dateStr: string, customAmt: number) => Promise<void>;
   createSplitPayment: (transactionId: string, dueDateStr: string, parts: { amount: number; dateStr: string }[]) => Promise<boolean>;
   updateLaunchDateInDb: (newDate: string) => Promise<boolean>;
+  updateCurrentBalanceInDb: (value: number | null) => Promise<boolean>;
+  updateLowBalanceAlertInDb: (value: number | null) => Promise<boolean>;
   completeOnboarding: (
     wizAccs: Account[],
     wizTxs: RecurringTransaction[],
@@ -181,10 +189,12 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [transactionOverrides, setTransactionOverrides] = useState<TransactionOverride[]>([]);
   const [launchDateStr, setLaunchDateStr] = useState<string>("");
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(false);
+  const [currentBalance, setCurrentBalance] = useState<number | null>(null);
+  const [lowBalanceAlert, setLowBalanceAlert] = useState<number | null>(null);
 
   // View States
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "accounts" | "income" | "expenses" | "liabilities"
+    "dashboard" | "accounts" | "income" | "expenses" | "liabilities" | "settings"
   >("dashboard");
   const [expenseSubTab, setExpenseSubTab] = useState<"all" | "fixed" | "subscriptions" | "savings">(
     "all"
@@ -263,6 +273,8 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
           setLaunchDateStr(settings.launchDate || todayStr);
           setOnboardingCompleted(settings.onboardingCompleted);
+          setCurrentBalance(settings.currentBalance);
+          setLowBalanceAlert(settings.lowBalanceAlert);
 
           const d = parseDateLocal(settings.launchDate || todayStr);
           setCalendarYear(d.getFullYear());
@@ -823,6 +835,40 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   };
 
+  const updateCurrentBalanceInDb = async (value: number | null): Promise<boolean> => {
+    if (!userId) return false;
+    setIsSaving(true);
+    const previous = currentBalance;
+    setCurrentBalance(value);
+    try {
+      await updateCurrentBalance(supabase, userId, value);
+      setIsSaving(false);
+      return true;
+    } catch (err: any) {
+      setCurrentBalance(previous);
+      setAlertMessage(err.message || "Failed to update current balance.");
+      setIsSaving(false);
+      return false;
+    }
+  };
+
+  const updateLowBalanceAlertInDb = async (value: number | null): Promise<boolean> => {
+    if (!userId) return false;
+    setIsSaving(true);
+    const previous = lowBalanceAlert;
+    setLowBalanceAlert(value);
+    try {
+      await updateLowBalanceAlert(supabase, userId, value);
+      setIsSaving(false);
+      return true;
+    } catch (err: any) {
+      setLowBalanceAlert(previous);
+      setAlertMessage(err.message || "Failed to update low balance alert threshold.");
+      setIsSaving(false);
+      return false;
+    }
+  };
+
   const completeOnboarding = async (
     wizAccs: Account[],
     wizTxs: RecurringTransaction[],
@@ -967,6 +1013,8 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
         transactionOverrides,
         launchDateStr,
         onboardingCompleted,
+        currentBalance,
+        lowBalanceAlert,
         userId,
         loading,
         isSaving,
@@ -1044,6 +1092,8 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
         modifyAmountOverride,
         createSplitPayment,
         updateLaunchDateInDb,
+        updateCurrentBalanceInDb,
+        updateLowBalanceAlertInDb,
         completeOnboarding,
         handleClearAllData,
         signOut,
