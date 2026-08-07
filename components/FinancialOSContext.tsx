@@ -3,20 +3,12 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { createClient } from "@/utils/supabase/client";
 import {
-  Account,
   RecurringTransaction,
   TransactionOverride,
   ForecastDay,
   generateForecast,
-  parseDateLocal,
   formatDateLocal,
 } from "@/lib/forecast";
-import {
-  fetchAccounts,
-  insertAccount,
-  updateAccount,
-  deleteAccount,
-} from "@/lib/data/accounts";
 import {
   fetchTransactions,
   insertTransaction,
@@ -33,11 +25,10 @@ import {
   fetchUserSettings,
   createUserSettings,
   updateOnboardingCompleted,
-  updateLaunchDate,
   updateCurrentBalance,
   updateLowBalanceAlert,
 } from "@/lib/data/settings";
-import { validateAccountInput, validateTransactionInput } from "@/lib/validation";
+import { validateTransactionInput } from "@/lib/validation";
 
 interface ConfirmDialogState {
   isOpen: boolean;
@@ -48,10 +39,8 @@ interface ConfirmDialogState {
 
 interface FinancialOSContextType {
   // Core Data
-  accounts: Account[];
   transactions: RecurringTransaction[];
   transactionOverrides: TransactionOverride[];
-  launchDateStr: string;
   onboardingCompleted: boolean;
   userId: string | null;
   loading: boolean;
@@ -62,10 +51,9 @@ interface FinancialOSContextType {
   lowBalanceAlert: number | null;
 
   // View Settings
-  activeTab: "dashboard" | "accounts" | "income" | "expenses" | "liabilities" | "settings";
+  activeTab: "dashboard" | "income" | "expenses" | "liabilities" | "settings";
   expenseSubTab: "all" | "fixed" | "subscriptions" | "savings";
   isMobileMenuOpen: boolean;
-  dashboardAccountFilter: string;
   dashboardViewMode: "calendar" | "analytics";
   forecastRange: "week" | "two-weeks" | "month" | "quarter";
   calendarYear: number;
@@ -74,15 +62,10 @@ interface FinancialOSContextType {
   // Selected Day Details / Modal states
   selectedDay: ForecastDay | null;
   isAddingTransaction: boolean;
-  formCategory: "income" | "fixed-expense" | "subscription" | "liability" | "savings" | "transfer";
+  formCategory: "income" | "fixed-expense" | "subscription" | "liability" | "savings";
   editingId: string | null;
   wizardStep: number;
   wizardError: string | null;
-  editingAccountId: string | null;
-  isAddingAccount: boolean;
-  deletingAccount: Account | null;
-  deleteAccountTransferTargetId: string;
-  deleteActionChoice: "transfer" | "archive";
   selectedDetailTransaction: RecurringTransaction | null;
   overrideEditingTxId: string | null;
   overrideCustomAmountInput: string;
@@ -92,10 +75,9 @@ interface FinancialOSContextType {
   alertMessage: string | null;
 
   // State Setters
-  setActiveTab: React.Dispatch<React.SetStateAction<"dashboard" | "accounts" | "income" | "expenses" | "liabilities" | "settings">>;
+  setActiveTab: React.Dispatch<React.SetStateAction<"dashboard" | "income" | "expenses" | "liabilities" | "settings">>;
   setExpenseSubTab: React.Dispatch<React.SetStateAction<"all" | "fixed" | "subscriptions" | "savings">>;
   setIsMobileMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  setDashboardAccountFilter: React.Dispatch<React.SetStateAction<string>>;
   setDashboardViewMode: React.Dispatch<React.SetStateAction<"calendar" | "analytics">>;
   setForecastRange: React.Dispatch<React.SetStateAction<"week" | "two-weeks" | "month" | "quarter">>;
   setCalendarYear: React.Dispatch<React.SetStateAction<number>>;
@@ -105,25 +87,19 @@ interface FinancialOSContextType {
   setSelectedDay: React.Dispatch<React.SetStateAction<ForecastDay | null>>;
   setIsAddingTransaction: React.Dispatch<React.SetStateAction<boolean>>;
   setFormCategory: React.Dispatch<
-    React.SetStateAction<"income" | "fixed-expense" | "subscription" | "liability" | "savings" | "transfer">
+    React.SetStateAction<"income" | "fixed-expense" | "subscription" | "liability" | "savings">
   >;
   setEditingId: React.Dispatch<React.SetStateAction<string | null>>;
   setWizardStep: React.Dispatch<React.SetStateAction<number>>;
   setWizardError: React.Dispatch<React.SetStateAction<string | null>>;
-  setEditingAccountId: React.Dispatch<React.SetStateAction<string | null>>;
-  setIsAddingAccount: React.Dispatch<React.SetStateAction<boolean>>;
-  setDeletingAccount: React.Dispatch<React.SetStateAction<Account | null>>;
-  setDeleteAccountTransferTargetId: React.Dispatch<React.SetStateAction<string>>;
-  setDeleteActionChoice: React.Dispatch<React.SetStateAction<"transfer" | "archive">>;
   setSelectedDetailTransaction: React.Dispatch<React.SetStateAction<RecurringTransaction | null>>;
   setOverrideEditingTxId: React.Dispatch<React.SetStateAction<string | null>>;
   setOverrideCustomAmountInput: React.Dispatch<React.SetStateAction<string>>;
 
   // Derived calculations
-  initialBalance: number;
   forecast: ForecastDay[];
   calendarForecastTimeline: ForecastDay[];
-  lowBalanceAlerts: { dateStr: string; accountName: string; balance: number }[];
+  lowBalanceAlerts: { dateStr: string; balance: number }[];
   categorizedTransactions: {
     income: RecurringTransaction[];
     fixedExpenses: RecurringTransaction[];
@@ -133,14 +109,6 @@ interface FinancialOSContextType {
   };
 
   // Mutators
-  saveAccount: (
-    accountInput: Parameters<typeof validateAccountInput>[0] & { id?: string }
-  ) => Promise<boolean>;
-  deleteAccountWithStrategy: (
-    accountId: string,
-    strategy: "transfer" | "archive",
-    transferTargetId?: string
-  ) => Promise<boolean>;
   saveTransaction: (
     txInput: Parameters<typeof validateTransactionInput>[0] & { id?: string }
   ) => Promise<boolean>;
@@ -150,19 +118,15 @@ interface FinancialOSContextType {
   skipOverride: (transactionId: string, dateStr: string) => Promise<void>;
   modifyAmountOverride: (transactionId: string, dateStr: string, customAmt: number) => Promise<void>;
   createSplitPayment: (transactionId: string, dueDateStr: string, parts: { amount: number; dateStr: string }[]) => Promise<boolean>;
-  updateLaunchDateInDb: (newDate: string) => Promise<boolean>;
   updateCurrentBalanceInDb: (value: number | null) => Promise<boolean>;
   updateLowBalanceAlertInDb: (value: number | null) => Promise<boolean>;
   completeOnboarding: (
-    wizAccs: Account[],
     wizTxs: RecurringTransaction[],
     wizSavingsEnabled: boolean,
     wizSavingsTitle: string,
     wizSavingsAmount: string,
     wizSavingsFrequency: string,
-    wizSavingsStartDate: string,
-    wizSavingsFundingId: string,
-    wizSavingsAccountId: string
+    wizSavingsStartDate: string
   ) => Promise<boolean>;
   handleClearAllData: () => void;
   signOut: () => Promise<void>;
@@ -179,44 +143,37 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [userId, setUserId] = useState<string | null>(null);
 
   // Core Data States
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<RecurringTransaction[]>([]);
   const [transactionOverrides, setTransactionOverrides] = useState<TransactionOverride[]>([]);
-  const [launchDateStr, setLaunchDateStr] = useState<string>("");
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(false);
   const [currentBalance, setCurrentBalance] = useState<number | null>(null);
   const [lowBalanceAlert, setLowBalanceAlert] = useState<number | null>(null);
 
   // View States
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "accounts" | "income" | "expenses" | "liabilities" | "settings"
+    "dashboard" | "income" | "expenses" | "liabilities" | "settings"
   >("dashboard");
   const [expenseSubTab, setExpenseSubTab] = useState<"all" | "fixed" | "subscriptions" | "savings">(
     "all"
   );
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
-  const [dashboardAccountFilter, setDashboardAccountFilter] = useState<string>("");
   const [dashboardViewMode, setDashboardViewMode] = useState<"calendar" | "analytics">("calendar");
   const [forecastRange, setForecastRange] = useState<"week" | "two-weeks" | "month" | "quarter">(
     "month"
   );
-  const [calendarYear, setCalendarYear] = useState<number>(2026);
-  const [calendarMonth, setCalendarMonth] = useState<number>(6);
+  const now = new Date();
+  const [calendarYear, setCalendarYear] = useState<number>(now.getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState<number>(now.getMonth());
 
   // Modals & Forms States
   const [selectedDay, setSelectedDay] = useState<ForecastDay | null>(null);
   const [isAddingTransaction, setIsAddingTransaction] = useState<boolean>(false);
   const [formCategory, setFormCategory] = useState<
-    "income" | "fixed-expense" | "subscription" | "liability" | "savings" | "transfer"
+    "income" | "fixed-expense" | "subscription" | "liability" | "savings"
   >("income");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [wizardStep, setWizardStep] = useState<number>(1);
   const [wizardError, setWizardError] = useState<string | null>(null);
-  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
-  const [isAddingAccount, setIsAddingAccount] = useState<boolean>(false);
-  const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
-  const [deleteAccountTransferTargetId, setDeleteAccountTransferTargetId] = useState<string>("");
-  const [deleteActionChoice, setDeleteActionChoice] = useState<"transfer" | "archive">("transfer");
   const [selectedDetailTransaction, setSelectedDetailTransaction] =
     useState<RecurringTransaction | null>(null);
   const [overrideEditingTxId, setOverrideEditingTxId] = useState<string | null>(null);
@@ -263,24 +220,17 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
             settings = await createUserSettings(supabase, user.id, todayStr);
           }
 
-          setLaunchDateStr(settings.launchDate || todayStr);
           setOnboardingCompleted(settings.onboardingCompleted);
           setCurrentBalance(settings.currentBalance);
           setLowBalanceAlert(settings.lowBalanceAlert);
 
-          const d = parseDateLocal(settings.launchDate || todayStr);
-          setCalendarYear(d.getFullYear());
-          setCalendarMonth(d.getMonth());
-
           // Fetch Core Collections
-          const [accs, txs, ovs] = await Promise.all([
-            fetchAccounts(supabase, user.id),
+          const [txs, ovs] = await Promise.all([
             fetchTransactions(supabase, user.id),
             fetchOverrides(supabase, user.id),
           ]);
 
           if (active) {
-            setAccounts(accs);
             setTransactions(txs);
             setTransactionOverrides(ovs);
             setLoading(false);
@@ -304,13 +254,9 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [supabase]);
 
   // Derived Calculations
-  const initialBalance = useMemo(() => {
-    return accounts.reduce((acc, curr) => acc + curr.balance, 0);
-  }, [accounts]);
-
   const forecast = useMemo(() => {
-    if (!launchDateStr || loading) return [];
-    const start = parseDateLocal(launchDateStr);
+    if (loading) return [];
+    const start = new Date();
     let days = 31;
     if (forecastRange === "week") {
       days = 7;
@@ -322,57 +268,40 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return generateForecast({
       startDate: start,
       numberOfDays: days,
-      accounts,
+      initialBalance: currentBalance ?? 0,
       transactions,
       overrides: transactionOverrides,
     });
-  }, [launchDateStr, forecastRange, accounts, transactions, transactionOverrides, loading]);
+  }, [forecastRange, currentBalance, transactions, transactionOverrides, loading]);
 
   const calendarForecastTimeline = useMemo(() => {
-    if (!launchDateStr || loading) return [];
-    const startOfCalendar = new Date(calendarYear, calendarMonth, 1);
+    if (loading) return [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const endOfCalendar = new Date(calendarYear, calendarMonth + 3, 0);
-    const launchDate = parseDateLocal(launchDateStr);
-    const simStart = launchDate < startOfCalendar ? launchDate : startOfCalendar;
-    const diffTime = Math.abs(endOfCalendar.getTime() - simStart.getTime());
-    const simDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 15;
+    const diffTime = endOfCalendar.getTime() - today.getTime();
+    const simDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 15);
 
     return generateForecast({
-      startDate: simStart,
+      startDate: today,
       numberOfDays: simDays,
-      accounts,
+      initialBalance: currentBalance ?? 0,
       transactions,
       overrides: transactionOverrides,
     });
-  }, [calendarYear, calendarMonth, launchDateStr, accounts, transactions, transactionOverrides, loading]);
+  }, [calendarYear, calendarMonth, currentBalance, transactions, transactionOverrides, loading]);
 
   const lowBalanceAlerts = useMemo(() => {
-    const alerts: { dateStr: string; accountName: string; balance: number }[] = [];
-    if (loading) return alerts;
+    const alerts: { dateStr: string; balance: number }[] = [];
+    if (loading || lowBalanceAlert === null) return alerts;
 
-    const timeline = calendarForecastTimeline;
-    const cashAccounts = accounts;
-    const checkedDates = new Set<string>();
-
-    for (const day of timeline) {
-      if (day.dateStr < launchDateStr) continue;
-      for (const acc of cashAccounts) {
-        const bal = day.accountBalances[acc.id] ?? 0;
-        if (bal < 100) {
-          const key = `${day.dateStr}_${acc.id}`;
-          if (!checkedDates.has(key)) {
-            checkedDates.add(key);
-            alerts.push({
-              dateStr: day.dateStr,
-              accountName: acc.name,
-              balance: bal,
-            });
-          }
-        }
+    for (const day of calendarForecastTimeline) {
+      if (day.endingBalance < lowBalanceAlert) {
+        alerts.push({ dateStr: day.dateStr, balance: day.endingBalance });
       }
     }
     return alerts.sort((a, b) => a.dateStr.localeCompare(b.dateStr)).slice(0, 5);
-  }, [calendarForecastTimeline, accounts, launchDateStr, loading]);
+  }, [calendarForecastTimeline, lowBalanceAlert, loading]);
 
   const categorizedTransactions = useMemo(() => {
     return {
@@ -385,132 +314,6 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [transactions]);
 
   // MUTATORS
-  const saveAccount = async (
-    accountInput: Parameters<typeof validateAccountInput>[0] & { id?: string }
-  ): Promise<boolean> => {
-    if (!userId) return false;
-    const valResult = validateAccountInput(accountInput);
-    if (!valResult.success) {
-      setAlertMessage(valResult.error);
-      return false;
-    }
-
-    setIsSaving(true);
-    const validatedData = valResult.data;
-    const isEdit = !!accountInput.id;
-    const previousAccounts = [...accounts];
-
-    // Optimistic Update
-    const tempId = accountInput.id || crypto.randomUUID();
-    const optimisticAccount: Account = { ...validatedData, id: tempId };
-
-    if (isEdit) {
-      setAccounts((prev) => prev.map((a) => (a.id === accountInput.id ? optimisticAccount : a)));
-    } else {
-      setAccounts((prev) => [...prev, optimisticAccount]);
-    }
-
-    try {
-      if (isEdit) {
-        const updated = await updateAccount(
-          supabase,
-          { ...validatedData, id: accountInput.id! },
-          userId
-        );
-        setAccounts((prev) => prev.map((a) => (a.id === accountInput.id ? updated : a)));
-      } else {
-        const inserted = await insertAccount(supabase, validatedData, userId);
-        setAccounts((prev) => prev.map((a) => (a.id === tempId ? inserted : a)));
-      }
-      setIsSaving(false);
-      return true;
-    } catch (err: any) {
-      setAccounts(previousAccounts); // Rollback
-      setAlertMessage(err.message || "Failed to save the account to the database.");
-      setIsSaving(false);
-      return false;
-    }
-  };
-
-  const deleteAccountWithStrategy = async (
-    accountId: string,
-    strategy: "transfer" | "archive",
-    transferTargetId?: string
-  ): Promise<boolean> => {
-    if (!userId) return false;
-    setIsSaving(true);
-
-    const previousAccounts = [...accounts];
-    const previousTransactions = [...transactions];
-
-    // Optimistic Update
-    const remainingAccs = accounts.filter((a) => a.id !== accountId);
-    setAccounts(remainingAccs);
-
-    if (strategy === "transfer" && transferTargetId) {
-      setTransactions((prev) =>
-        prev.map((t) => {
-          const updated = { ...t };
-          if (updated.accountId === accountId) updated.accountId = transferTargetId;
-          if (updated.fundingAccountId === accountId) updated.fundingAccountId = transferTargetId;
-          if (updated.targetAccountId === accountId) updated.targetAccountId = transferTargetId;
-          return updated;
-        })
-      );
-    } else {
-      // Archive strategy: delete connected transactions
-      setTransactions((prev) =>
-        prev.filter(
-          (t) =>
-            t.accountId !== accountId &&
-            t.fundingAccountId !== accountId &&
-            t.targetAccountId !== accountId
-        )
-      );
-    }
-
-    try {
-      if (strategy === "transfer" && transferTargetId) {
-        // Find and update connected transactions in DB first
-        const affectedTxs = transactions.filter(
-          (t) =>
-            t.accountId === accountId ||
-            t.fundingAccountId === accountId ||
-            t.targetAccountId === accountId
-        );
-
-        await Promise.all(
-          affectedTxs.map((t) => {
-            const updated = { ...t };
-            if (updated.accountId === accountId) updated.accountId = transferTargetId;
-            if (updated.fundingAccountId === accountId) updated.fundingAccountId = transferTargetId;
-            if (updated.targetAccountId === accountId) updated.targetAccountId = transferTargetId;
-            return updateTransaction(supabase, updated, userId);
-          })
-        );
-      } else {
-        // Archive strategy: delete connected transactions in DB
-        const affectedTxs = transactions.filter(
-          (t) =>
-            t.accountId === accountId ||
-            t.fundingAccountId === accountId ||
-            t.targetAccountId === accountId
-        );
-        await Promise.all(affectedTxs.map((t) => deleteTransaction(supabase, t.id, userId)));
-      }
-
-      await deleteAccount(supabase, accountId, userId);
-      setIsSaving(false);
-      return true;
-    } catch (err: any) {
-      setAccounts(previousAccounts); // Rollback
-      setTransactions(previousTransactions); // Rollback
-      setAlertMessage(err.message || "Failed to complete account deletion.");
-      setIsSaving(false);
-      return false;
-    }
-  };
-
   const saveTransaction = async (
     txInput: Parameters<typeof validateTransactionInput>[0] & { id?: string }
   ): Promise<boolean> => {
@@ -639,9 +442,9 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     // Sync selected day detail UI if active
     if (selectedDay) {
       const activeTimeline = generateForecast({
-        startDate: parseDateLocal(launchDateStr),
+        startDate: new Date(),
         numberOfDays: 120,
-        accounts,
+        initialBalance: currentBalance ?? 0,
         transactions,
         overrides: newOverrides,
       });
@@ -701,9 +504,9 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     if (selectedDay) {
       const activeTimeline = generateForecast({
-        startDate: parseDateLocal(launchDateStr),
+        startDate: new Date(),
         numberOfDays: 120,
-        accounts,
+        initialBalance: currentBalance ?? 0,
         transactions,
         overrides: newOverrides,
       });
@@ -765,9 +568,9 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     if (selectedDay) {
       const activeTimeline = generateForecast({
-        startDate: parseDateLocal(launchDateStr),
+        startDate: new Date(),
         numberOfDays: 120,
-        accounts,
+        initialBalance: currentBalance ?? 0,
         transactions,
         overrides: newOverrides,
       });
@@ -809,9 +612,9 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
       if (selectedDay) {
         const activeTimeline = generateForecast({
-          startDate: parseDateLocal(launchDateStr),
+          startDate: new Date(),
           numberOfDays: 120,
-          accounts,
+          initialBalance: currentBalance ?? 0,
           transactions,
           overrides: [...previousOverrides.filter(
             (o) => !(o.transactionId === transactionId && o.dateStr === dueDateStr)
@@ -825,29 +628,6 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     } catch (err: any) {
       setTransactionOverrides(previousOverrides);
       setAlertMessage(err.message || "Failed to save split payment.");
-      return false;
-    }
-  };
-
-  const updateLaunchDateInDb = async (newDate: string): Promise<boolean> => {
-    if (!userId) return false;
-    setIsSaving(true);
-    const previousLaunchDate = launchDateStr;
-    setLaunchDateStr(newDate);
-
-    // Auto-adjust traditional calendar view to match the selected Starting Date
-    const d = parseDateLocal(newDate);
-    setCalendarYear(d.getFullYear());
-    setCalendarMonth(d.getMonth());
-
-    try {
-      await updateLaunchDate(supabase, userId, newDate);
-      setIsSaving(false);
-      return true;
-    } catch (err: any) {
-      setLaunchDateStr(previousLaunchDate); // Rollback
-      setAlertMessage(err.message || "Failed to update launch starting date.");
-      setIsSaving(false);
       return false;
     }
   };
@@ -887,80 +667,45 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   const completeOnboarding = async (
-    wizAccs: Account[],
     wizTxs: RecurringTransaction[],
     wizSavingsEnabled: boolean,
     wizSavingsTitle: string,
     wizSavingsAmount: string,
     wizSavingsFrequency: string,
-    wizSavingsStartDate: string,
-    wizSavingsFundingId: string,
-    wizSavingsAccountId: string
+    wizSavingsStartDate: string
   ): Promise<boolean> => {
     if (!userId) return false;
     setIsSaving(true);
 
     try {
-      const accountIdMap: Record<string, string> = {};
-
-      // 1. Insert accounts sequentially
-      for (const acc of wizAccs) {
-        const { id, ...payload } = acc;
-        const inserted = await insertAccount(supabase, payload, userId);
-        accountIdMap[id] = inserted.id;
-      }
-
-      // 2. Format and map transactions
-      const finalTxs: Omit<RecurringTransaction, "id">[] = [];
-
-      for (const tx of wizTxs) {
-        const { id, ...txPayload } = tx;
-
-        // Map Account IDs to database values
-        if (txPayload.accountId && accountIdMap[txPayload.accountId]) {
-          txPayload.accountId = accountIdMap[txPayload.accountId];
-        }
-        if (txPayload.fundingAccountId && accountIdMap[txPayload.fundingAccountId]) {
-          txPayload.fundingAccountId = accountIdMap[txPayload.fundingAccountId];
-        }
-        if (txPayload.targetAccountId && accountIdMap[txPayload.targetAccountId]) {
-          txPayload.targetAccountId = accountIdMap[txPayload.targetAccountId];
-        }
-
-        finalTxs.push(txPayload);
-      }
+      const todayStr = formatDateLocal(new Date());
+      const finalTxs: Omit<RecurringTransaction, "id">[] = wizTxs.map(({ id, ...txPayload }) => txPayload);
 
       // Add savings contributions if enabled
       if (wizSavingsEnabled && wizSavingsTitle.trim()) {
         const svAmt = parseFloat(wizSavingsAmount);
-        if (svAmt > 0 && wizSavingsFundingId && wizSavingsAccountId) {
+        if (svAmt > 0) {
           finalTxs.push({
             title: wizSavingsTitle.trim(),
             amount: svAmt,
-            startDate: wizSavingsStartDate || launchDateStr,
+            startDate: wizSavingsStartDate || todayStr,
             frequency: wizSavingsFrequency as any,
             category: "savings",
-            fundingAccountId: accountIdMap[wizSavingsFundingId],
-            targetAccountId: accountIdMap[wizSavingsAccountId],
           });
         }
       }
 
-      // 3. Insert transactions sequentially
+      // Insert transactions sequentially
       for (const tx of finalTxs) {
         await insertTransaction(supabase, tx, userId);
       }
 
-      // 4. Update onboarding flag in settings
+      // Update onboarding flag in settings
       await updateOnboardingCompleted(supabase, userId, true);
 
-      // 5. Hydrate latest data from DB
-      const [latestAccs, latestTxs] = await Promise.all([
-        fetchAccounts(supabase, userId),
-        fetchTransactions(supabase, userId),
-      ]);
+      // Hydrate latest data from DB
+      const latestTxs = await fetchTransactions(supabase, userId);
 
-      setAccounts(latestAccs);
       setTransactions(latestTxs);
       setOnboardingCompleted(true);
       setIsSaving(false);
@@ -977,7 +722,7 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setConfirmDialog({
       isOpen: true,
       title: "Clear All Data",
-      message: "Are you sure you want to clear all accounts, transactions, and start fresh?",
+      message: "Are you sure you want to clear all transactions and start fresh?",
       onConfirm: async () => {
         setIsSaving(true);
         try {
@@ -985,24 +730,13 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
           await Promise.all([
             supabase.from("transaction_overrides").delete().eq("user_id", userId),
             supabase.from("transactions").delete().eq("user_id", userId),
-            supabase.from("accounts").delete().eq("user_id", userId),
           ]);
-
-          // Create a primary default Checking account
-          const defaultChecking = await insertAccount(
-            supabase,
-            {
-              name: "Primary Checking",
-              type: "checking",
-              balance: 0,
-            },
-            userId
-          );
+          await updateCurrentBalance(supabase, userId, 0);
 
           // Reset local states
-          setAccounts([defaultChecking]);
           setTransactions([]);
           setTransactionOverrides([]);
+          setCurrentBalance(0);
           setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
           setIsSaving(false);
         } catch (err: any) {
@@ -1025,10 +759,8 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
   return (
     <FinancialOSContext.Provider
       value={{
-        accounts,
         transactions,
         transactionOverrides,
-        launchDateStr,
         onboardingCompleted,
         currentBalance,
         lowBalanceAlert,
@@ -1039,7 +771,6 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
         activeTab,
         expenseSubTab,
         isMobileMenuOpen,
-        dashboardAccountFilter,
         dashboardViewMode,
         forecastRange,
         calendarYear,
@@ -1051,11 +782,6 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
         editingId,
         wizardStep,
         wizardError,
-        editingAccountId,
-        isAddingAccount,
-        deletingAccount,
-        deleteAccountTransferTargetId,
-        deleteActionChoice,
         selectedDetailTransaction,
         overrideEditingTxId,
         overrideCustomAmountInput,
@@ -1066,7 +792,6 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setActiveTab,
         setExpenseSubTab,
         setIsMobileMenuOpen,
-        setDashboardAccountFilter,
         setDashboardViewMode,
         setForecastRange,
         setCalendarYear,
@@ -1079,23 +804,15 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setEditingId,
         setWizardStep,
         setWizardError,
-        setEditingAccountId,
-        setIsAddingAccount,
-        setDeletingAccount,
-        setDeleteAccountTransferTargetId,
-        setDeleteActionChoice,
         setSelectedDetailTransaction,
         setOverrideEditingTxId,
         setOverrideCustomAmountInput,
 
-        initialBalance,
         forecast,
         calendarForecastTimeline,
         lowBalanceAlerts,
         categorizedTransactions,
 
-        saveAccount,
-        deleteAccountWithStrategy,
         saveTransaction,
         deleteTransactionById,
         markLiabilityPaidOff,
@@ -1103,7 +820,6 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
         skipOverride,
         modifyAmountOverride,
         createSplitPayment,
-        updateLaunchDateInDb,
         updateCurrentBalanceInDb,
         updateLowBalanceAlertInDb,
         completeOnboarding,

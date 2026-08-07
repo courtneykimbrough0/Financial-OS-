@@ -17,10 +17,10 @@ import {
 } from "lucide-react";
 import { useFinancialData } from "./FinancialOSContext";
 import {
-  Account,
   RecurringTransaction,
-  SAMPLE_ACCOUNTS,
+  SAMPLE_STARTING_BALANCE,
   SAMPLE_TRANSACTIONS,
+  formatDateLocal,
   getMonthlyEquivalent,
   getQuarterlyEquivalent,
   getFrequencySubtext,
@@ -29,22 +29,14 @@ import {
 const generateId = () => "tx_" + Math.random().toString(36).substring(2, 11);
 
 export const OnboardingWizard: React.FC = () => {
-  const { completeOnboarding, launchDateStr, updateLaunchDateInDb, isSaving } = useFinancialData();
+  const { completeOnboarding, updateCurrentBalanceInDb, isSaving } = useFinancialData();
+  const todayStr = formatDateLocal(new Date());
 
   const [wizActiveStep, setWizActiveStep] = useState<number>(0);
   const [wizError, setWizError] = useState<string | null>(null);
 
   // Lists of items configured during onboarding
-  const [wizAccounts, setWizAccounts] = useState<Account[]>([]);
   const [wizTransactions, setWizTransactions] = useState<RecurringTransaction[]>([]);
-
-  // Accounts step form inputs
-  const [wizAccName, setWizAccName] = useState<string>("");
-  const [wizAccType, setWizAccType] = useState<"checking" | "savings" | "other">(
-    "checking"
-  );
-  const [wizAccCustomType, setWizAccCustomType] = useState<string>("");
-  const [wizAccBalance, setWizAccBalance] = useState<string>("");
 
   // Income & Expenses steps form inputs
   const [wizTitle, setWizTitle] = useState<string>("");
@@ -52,9 +44,6 @@ export const OnboardingWizard: React.FC = () => {
   const [wizFrequency, setWizFrequency] = useState<string>("monthly");
   const [wizSemiDays, setWizSemiDays] = useState<string>("1,15");
   const [wizStartDate, setWizStartDate] = useState<string>("");
-  const [wizAccountId, setWizAccountId] = useState<string>("");
-  const [wizFundingAccountId, setWizFundingAccountId] = useState<string>("");
-
 
   // Expense classification
   const [wizExpenseType, setWizExpenseType] = useState<"fixed-expense" | "subscription">(
@@ -71,25 +60,21 @@ export const OnboardingWizard: React.FC = () => {
   const [wizSavingsAmount, setWizSavingsAmount] = useState<string>("");
   const [wizSavingsFrequency, setWizSavingsFrequency] = useState<string>("monthly");
   const [wizSavingsStartDate, setWizSavingsStartDate] = useState<string>("");
-  const [wizSavingsFundingId, setWizSavingsFundingId] = useState<string>("");
-  const [wizSavingsAccountId, setWizSavingsAccountId] = useState<string>("");
 
   const handleLoadSampleData = async () => {
     setWizError(null);
-    await completeOnboarding(SAMPLE_ACCOUNTS, SAMPLE_TRANSACTIONS, false, "", "", "monthly", "", "", "");
+    await updateCurrentBalanceInDb(SAMPLE_STARTING_BALANCE);
+    await completeOnboarding(SAMPLE_TRANSACTIONS, false, "", "", "monthly", "");
   };
 
   const handleFinishOnboarding = async () => {
     const success = await completeOnboarding(
-      wizAccounts,
       wizTransactions,
       wizSavingsEnabled,
       wizSavingsTitle,
       wizSavingsAmount,
       wizSavingsFrequency,
-      wizSavingsStartDate,
-      wizSavingsFundingId,
-      wizSavingsAccountId
+      wizSavingsStartDate
     );
     if (!success) {
       setWizError("An error occurred while establishing your workspace. Please try again.");
@@ -144,17 +129,16 @@ export const OnboardingWizard: React.FC = () => {
           {/* Progress Indicator */}
           <div className="flex items-center gap-2 bg-zinc-900/40 border border-white/5 px-4 py-2 rounded-2xl">
             {[
-              { step: 0, label: "Start" },
-              { step: 1, label: "Income" },
-              { step: 2, label: "Expenses" },
-              { step: 3, label: "Liabilities" },
-              { step: 4, label: "Savings" },
-              { step: 5, label: "Summary" },
+              { step: 0, label: "Income" },
+              { step: 1, label: "Expenses" },
+              { step: 2, label: "Liabilities" },
+              { step: 3, label: "Savings" },
+              { step: 4, label: "Summary" },
             ].map((item, idx) => (
               <React.Fragment key={item.step}>
                 <button
                   onClick={() => {
-                    if (item.step <= Math.max(wizActiveStep, 1)) {
+                    if (item.step <= Math.max(wizActiveStep, 0)) {
                       setWizActiveStep(item.step);
                       setWizError(null);
                     }
@@ -167,9 +151,9 @@ export const OnboardingWizard: React.FC = () => {
                       : "bg-zinc-900 text-zinc-500 border border-white/5"
                   }`}
                 >
-                  {item.step === 5 ? "✓" : item.step}
+                  {item.step === 4 ? "✓" : item.step}
                 </button>
-                {idx < 5 && (
+                {idx < 4 && (
                   <div
                     className={`w-3 sm:w-6 h-[2px] ${
                       wizActiveStep > item.step ? "bg-emerald-500/40" : "bg-zinc-800"
@@ -195,268 +179,8 @@ export const OnboardingWizard: React.FC = () => {
             </div>
           )}
 
-          {/* STEP 0: ACCOUNTS SETUP */}
+          {/* STEP 0: INCOME SETUP */}
           {wizActiveStep === 0 && (
-            <motion.div
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex flex-col gap-5"
-            >
-              {/* Product framing — shown once at the very start */}
-              <div className="bg-indigo-500/8 border border-indigo-500/20 rounded-2xl px-5 py-4">
-                <p className="text-sm font-semibold text-indigo-200 leading-snug">
-                  Financial OS forecasts your recurring bills, income, and planned one-time expenses
-                  — it doesn&apos;t track every purchase.
-                </p>
-                <p className="text-xs text-indigo-300/70 mt-1.5 leading-relaxed">
-                  Tell it what&apos;s scheduled, and it shows you what&apos;s left to spend freely — before
-                  the next bill hits.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Add Account Inline Form */}
-              <div className="lg:col-span-5 bg-zinc-950/40 border border-white/5 p-5 rounded-2xl flex flex-col gap-4">
-                <div>
-                  <h4 className="text-sm font-bold text-white">1. Add Your Accounts</h4>
-                  <p className="text-[11px] text-zinc-400">
-                    Establish your checking, savings, or other accounts.
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                      Account Name
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Chase Checking, High-Yield Savings"
-                      value={wizAccName}
-                      onChange={(e) => {
-                        setWizAccName(e.target.value);
-                        setWizError(null);
-                      }}
-                      className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                        Account Type
-                      </label>
-                      <select
-                        value={wizAccType}
-                        onChange={(e) => {
-                          setWizAccType(e.target.value as any);
-                          setWizError(null);
-                        }}
-                        className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
-                      >
-                        <option value="checking">Checking</option>
-                        <option value="savings">Savings</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                        Starting Balance ($)
-                      </label>
-                      <input
-                        type="number"
-                        placeholder="0.00"
-                        value={wizAccBalance}
-                        onChange={(e) => {
-                          setWizAccBalance(e.target.value);
-                          setWizError(null);
-                        }}
-                        className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono font-medium"
-                      />
-                    </div>
-                  </div>
-
-                  {wizAccType === "other" && (
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold font-mono tracking-wider text-amber-400 uppercase block">
-                        Specify Account Type
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Brokerage, Cash Envelope"
-                        value={wizAccCustomType}
-                        onChange={(e) => {
-                          setWizAccCustomType(e.target.value);
-                          setWizError(null);
-                        }}
-                        className="bg-zinc-900 border border-amber-500/30 focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none font-medium"
-                      />
-                      <span className="text-[9px] text-zinc-500 italic block">
-                        Please enter an account type to avoid ambiguity.
-                      </span>
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!wizAccName.trim()) {
-                        setWizError("Please enter an account name.");
-                        return;
-                      }
-                      if (wizAccType === "other" && !wizAccCustomType.trim()) {
-                        setWizError(
-                          "Account type cannot be ambiguous. Please specify the custom account type."
-                        );
-                        return;
-                      }
-                      const bal = parseFloat(wizAccBalance) || 0;
-                      const accId = "acc_" + String(new Date().getTime());
-                      const newAccount: Account = {
-                        id: accId,
-                        name: wizAccName.trim(),
-                        type: wizAccType,
-                        customType: wizAccType === "other" ? wizAccCustomType.trim() : undefined,
-                        balance: Math.max(0, bal),
-                      };
-
-                      const updatedAccounts = [...wizAccounts, newAccount];
-                      setWizAccounts(updatedAccounts);
-
-                      // Reset form inputs
-                      setWizAccName("");
-                      setWizAccCustomType("");
-                      setWizAccBalance("");
-                      setWizError(null);
-                    }}
-                    className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-md mt-2 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Account</span>
-                  </button>
-                </div>
-
-                <div className="border-t border-white/5 pt-3">
-                  <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase block mb-1">
-                    Starting Date
-                  </label>
-                  <input
-                    type="date"
-                    value={launchDateStr}
-                    onChange={(e) => updateLaunchDateInDb(e.target.value)}
-                    className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono w-full cursor-pointer"
-                  />
-                  <span className="text-[9px] text-zinc-500 block mt-1">
-                    Forecast timeline projections begin here.
-                  </span>
-                </div>
-              </div>
-
-              {/* List Area */}
-              <div className="lg:col-span-7 flex flex-col justify-between">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h5 className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-400">
-                      Accounts
-                    </h5>
-                    <span className="text-xs font-bold text-indigo-400">
-                      Net Assets: $
-                      {wizAccounts
-                        .reduce(
-                          (sum, a) => sum + a.balance,
-                          0
-                        )
-                        .toLocaleString("en-US", {
-                          minimumFractionDigits: 2,
-                        })}
-                    </span>
-                  </div>
-
-                  <div className="bg-zinc-950/20 border border-white/5 rounded-2xl overflow-hidden min-h-[180px] flex flex-col justify-center">
-                    {wizAccounts.length === 0 ? (
-                      <div className="text-center py-8 text-zinc-500 text-xs italic space-y-1.5">
-                        <p>No accounts registered yet.</p>
-                        <p className="text-[10px] text-zinc-600">
-                          Add checking or savings accounts to establish starting funds.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-white/5 max-h-[220px] overflow-y-auto scrollbar-thin">
-                        {wizAccounts.map((acc) => (
-                          <div
-                            key={acc.id}
-                            className="flex items-center justify-between p-3 hover:bg-zinc-900/30 transition-colors"
-                          >
-                            <div>
-                              <p className="text-xs font-semibold text-white">{acc.name}</p>
-                              <p className="text-[10px] text-zinc-400 capitalize font-mono">
-                                {acc.type === "other" ? acc.customType : acc.type}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs font-mono font-bold text-emerald-400">
-                                ${acc.balance.toLocaleString("en-US", {
-                                  minimumFractionDigits: 2,
-                                })}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setWizAccounts(wizAccounts.filter((a) => a.id !== acc.id));
-                                  setWizTransactions(
-                                    wizTransactions.filter((t) => t.targetAccountId !== acc.id)
-                                  );
-                                }}
-                                className="text-[10px] text-zinc-400 hover:text-white font-bold px-2 py-1 cursor-pointer font-semibold"
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="pt-6 flex items-center justify-between gap-4 border-t border-white/5 mt-6">
-                  <button
-                    type="button"
-                    onClick={handleLoadSampleData}
-                    className="text-xs font-mono font-bold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
-                  >
-                    Skip & Load Sample Data
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const hasCashAcc = wizAccounts.some(
-                        (a) => a.type !== "other"
-                      );
-                      if (!hasCashAcc) {
-                        setWizError(
-                          "Please register at least one Checking or Savings asset account to begin."
-                        );
-                        return;
-                      }
-                      setWizError(null);
-                      setWizActiveStep(1);
-                    }}
-                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white flex items-center gap-1.5 shadow-lg shadow-indigo-600/15 transition-all active:scale-95 cursor-pointer"
-                  >
-                    <span>Next: Set Up Income</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              </div>{/* end grid wrapper */}
-            </motion.div>
-          )}
-
-          {/* STEP 1: INCOME SETUP */}
-          {wizActiveStep === 1 && (
             <motion.div
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
@@ -545,30 +269,10 @@ export const OnboardingWizard: React.FC = () => {
                     </label>
                     <input
                       type="date"
-                      value={wizStartDate || launchDateStr}
+                      value={wizStartDate || todayStr}
                       onChange={(e) => setWizStartDate(e.target.value)}
                       className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono cursor-pointer"
                     />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                      Deposit to Account
-                    </label>
-                    <select
-                      value={wizAccountId}
-                      required
-                      onChange={(e) => setWizAccountId(e.target.value)}
-                      className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
-                    >
-                      <option value="">Select an account...</option>
-                      {wizAccounts
-                        .map((acc) => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
-                          </option>
-                        ))}
-                    </select>
                   </div>
 
                   <button
@@ -583,18 +287,13 @@ export const OnboardingWizard: React.FC = () => {
                         setWizError("Please enter a valid amount greater than 0.");
                         return;
                       }
-                      if (!wizAccountId) {
-                        setWizError("Please select an account to deposit this income into.");
-                        return;
-                      }
                       const payload: RecurringTransaction = {
                         id: generateId(),
                         title: wizTitle.trim(),
                         amount: amt,
-                        startDate: wizStartDate || launchDateStr,
+                        startDate: wizStartDate || todayStr,
                         frequency: wizFrequency as any,
                         category: "income",
-                        accountId: wizAccountId || undefined,
                         semiMonthlyDays:
                           wizFrequency === "semimonthly"
                             ? wizSemiDays
@@ -608,7 +307,6 @@ export const OnboardingWizard: React.FC = () => {
                       setWizAmount("");
                       setWizFrequency("monthly");
                       setWizSemiDays("1,15");
-                      setWizAccountId("");
                       setWizError(null);
                     }}
                     className="w-full py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-md mt-2 cursor-pointer"
@@ -702,16 +400,7 @@ export const OnboardingWizard: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-6 border-t border-white/5 mt-6">
-                  <button
-                    type="button"
-                    onClick={() => setWizActiveStep(0)}
-                    className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Back</span>
-                  </button>
-
+                <div className="flex items-center justify-end pt-6 border-t border-white/5 mt-6">
                   <button
                     type="button"
                     onClick={() => {
@@ -720,7 +409,7 @@ export const OnboardingWizard: React.FC = () => {
                           "We highly recommend adding at least one regular income source so the forecast can show what's left to spend."
                         );
                       }
-                      setWizActiveStep(2);
+                      setWizActiveStep(1);
                       setWizError(null);
                     }}
                     className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white flex items-center gap-1.5 shadow-lg shadow-indigo-600/15 transition-all cursor-pointer"
@@ -733,8 +422,8 @@ export const OnboardingWizard: React.FC = () => {
             </motion.div>
           )}
 
-          {/* STEP 2: EXPENSES SETUP */}
-          {wizActiveStep === 2 && (
+          {/* STEP 1: EXPENSES SETUP */}
+          {wizActiveStep === 1 && (
             <motion.div
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
@@ -836,33 +525,10 @@ export const OnboardingWizard: React.FC = () => {
                     </label>
                     <input
                       type="date"
-                      value={wizStartDate || launchDateStr}
+                      value={wizStartDate || todayStr}
                       onChange={(e) => setWizStartDate(e.target.value)}
                       className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono cursor-pointer"
                     />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                      Paid From Account
-                    </label>
-                    <select
-                      value={wizAccountId}
-                      required
-                      onChange={(e) => setWizAccountId(e.target.value)}
-                      className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
-                    >
-                      <option value="">Select an account...</option>
-                      {wizAccounts.map((acc) => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.name} (
-                          {acc.type === "other"
-                            ? acc.customType || "Other"
-                            : acc.type}
-                          )
-                        </option>
-                      ))}
-                    </select>
                   </div>
 
                   <button
@@ -877,24 +543,18 @@ export const OnboardingWizard: React.FC = () => {
                         setWizError("Please enter a valid amount greater than 0.");
                         return;
                       }
-                      if (!wizAccountId) {
-                        setWizError("Please select an account to pay this from.");
-                        return;
-                      }
                       const payload: RecurringTransaction = {
                         id: generateId(),
                         title: wizTitle.trim(),
                         amount: amt,
-                        startDate: wizStartDate || launchDateStr,
+                        startDate: wizStartDate || todayStr,
                         frequency: wizFrequency as any,
                         category: wizExpenseType,
-                        accountId: wizAccountId || undefined,
                       };
                       setWizTransactions([...wizTransactions, payload]);
                       setWizTitle("");
                       setWizAmount("");
                       setWizFrequency("monthly");
-                      setWizAccountId("");
                       setWizError(null);
                     }}
                     className="w-full py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-md mt-2 cursor-pointer"
@@ -1011,7 +671,7 @@ export const OnboardingWizard: React.FC = () => {
                 <div className="flex items-center justify-between pt-6 border-t border-white/5 mt-6">
                   <button
                     type="button"
-                    onClick={() => setWizActiveStep(1)}
+                    onClick={() => setWizActiveStep(0)}
                     className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <ArrowLeft className="w-4 h-4" />
@@ -1021,7 +681,7 @@ export const OnboardingWizard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      setWizActiveStep(3);
+                      setWizActiveStep(2);
                       setWizError(null);
                     }}
                     className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white flex items-center gap-1.5 shadow-lg shadow-indigo-600/15 transition-all cursor-pointer"
@@ -1034,8 +694,8 @@ export const OnboardingWizard: React.FC = () => {
             </motion.div>
           )}
 
-          {/* STEP 3: LIABILITIES SETUP */}
-          {wizActiveStep === 3 && (
+          {/* STEP 2: LIABILITIES SETUP */}
+          {wizActiveStep === 2 && (
             <motion.div
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
@@ -1108,7 +768,7 @@ export const OnboardingWizard: React.FC = () => {
                     </label>
                     <input
                       type="date"
-                      value={wizStartDate || launchDateStr}
+                      value={wizStartDate || todayStr}
                       onChange={(e) => setWizStartDate(e.target.value)}
                       className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono cursor-pointer"
                     />
@@ -1143,26 +803,6 @@ export const OnboardingWizard: React.FC = () => {
                     <span>This due date can be moved a few days if needed</span>
                   </label>
 
-                  <div className="flex flex-col gap-1.5 font-sans">
-                    <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                      Paid From Account
-                    </label>
-                    <select
-                      value={wizFundingAccountId}
-                      required
-                      onChange={(e) => setWizFundingAccountId(e.target.value)}
-                      className="bg-zinc-900 border border-white/10 rounded-xl px-2.5 py-2 text-[11px] text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
-                    >
-                      <option value="">Select an account...</option>
-                      {wizAccounts
-                        .map((acc) => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-
                   <button
                     type="button"
                     onClick={() => {
@@ -1175,18 +815,13 @@ export const OnboardingWizard: React.FC = () => {
                         setWizError("Please enter a valid amount greater than 0.");
                         return;
                       }
-                      if (!wizFundingAccountId) {
-                        setWizError("Please select an account to pay this from.");
-                        return;
-                      }
                       const payload: RecurringTransaction = {
                         id: generateId(),
                         title: wizTitle.trim(),
                         amount: amt,
-                        startDate: wizStartDate || launchDateStr,
+                        startDate: wizStartDate || todayStr,
                         frequency: wizFrequency as any,
                         category: "liability",
-                        fundingAccountId: wizFundingAccountId || undefined,
                         dayOfMonth: wizDayOfMonth || undefined,
                         movableDueDate: wizMovableDueDate,
                       };
@@ -1194,7 +829,6 @@ export const OnboardingWizard: React.FC = () => {
                       setWizTitle("");
                       setWizAmount("");
                       setWizFrequency("monthly");
-                      setWizFundingAccountId("");
                       setWizDayOfMonth("1");
                       setWizMovableDueDate(false);
                       setWizError(null);
@@ -1293,7 +927,7 @@ export const OnboardingWizard: React.FC = () => {
                 <div className="flex items-center justify-between pt-6 border-t border-white/5 mt-6">
                   <button
                     type="button"
-                    onClick={() => setWizActiveStep(2)}
+                    onClick={() => setWizActiveStep(1)}
                     className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <ArrowLeft className="w-4 h-4" />
@@ -1303,7 +937,7 @@ export const OnboardingWizard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      setWizActiveStep(4);
+                      setWizActiveStep(3);
                       setWizError(null);
                     }}
                     className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white flex items-center gap-1.5 shadow-lg shadow-indigo-600/15 transition-all cursor-pointer"
@@ -1316,8 +950,8 @@ export const OnboardingWizard: React.FC = () => {
             </motion.div>
           )}
 
-          {/* STEP 4: SAVINGS TARGET SETUP */}
-          {wizActiveStep === 4 && (
+          {/* STEP 3: SAVINGS TARGET SETUP */}
+          {wizActiveStep === 3 && (
             <motion.div
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
@@ -1405,53 +1039,10 @@ export const OnboardingWizard: React.FC = () => {
                         </label>
                         <input
                           type="date"
-                          value={wizSavingsStartDate || launchDateStr}
+                          value={wizSavingsStartDate || todayStr}
                           onChange={(e) => setWizSavingsStartDate(e.target.value)}
                           className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono cursor-pointer"
                         />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                          From Account (Source)
-                        </label>
-                        <select
-                          value={wizSavingsFundingId}
-                          onChange={(e) => setWizSavingsFundingId(e.target.value)}
-                          className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
-                        >
-                          <option value="">Select cash asset account</option>
-                          {wizAccounts
-                            .map((acc) => (
-                              <option key={acc.id} value={acc.id}>
-                                {acc.name} ($
-                                {acc.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })})
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                          To Account (Destination)
-                        </label>
-                        <select
-                          value={wizSavingsAccountId}
-                          onChange={(e) => setWizSavingsAccountId(e.target.value)}
-                          className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
-                        >
-                          <option value="">Select savings target account</option>
-                          {wizAccounts
-                            .filter((a) => a.type === "savings")
-                            .map((acc) => (
-                              <option key={acc.id} value={acc.id}>
-                                {acc.name} ($
-                                {acc.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })})
-                              </option>
-                            ))}
-                        </select>
                       </div>
                     </div>
                   </motion.div>
@@ -1460,7 +1051,7 @@ export const OnboardingWizard: React.FC = () => {
                 <div className="flex items-center justify-between gap-4 pt-6 mt-4 border-t border-white/5">
                   <button
                     type="button"
-                    onClick={() => setWizActiveStep(3)}
+                    onClick={() => setWizActiveStep(2)}
                     className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <ArrowLeft className="w-4 h-4" />
@@ -1478,7 +1069,7 @@ export const OnboardingWizard: React.FC = () => {
                         }
                       }
                       setWizError(null);
-                      setWizActiveStep(5);
+                      setWizActiveStep(4);
                     }}
                     className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white flex items-center gap-1.5 shadow-lg shadow-indigo-600/15 transition-all cursor-pointer"
                   >
@@ -1490,8 +1081,8 @@ export const OnboardingWizard: React.FC = () => {
             </motion.div>
           )}
 
-          {/* STEP 5: SUMMARY & LAUNCH */}
-          {wizActiveStep === 5 && (
+          {/* STEP 4: SUMMARY & LAUNCH */}
+          {wizActiveStep === 4 && (
             <motion.div
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
@@ -1500,35 +1091,6 @@ export const OnboardingWizard: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Left Column: Summary Lists */}
                 <div className="lg:col-span-6 space-y-4 max-h-[600px] overflow-y-auto pr-1 scrollbar-thin">
-                  <div className="bg-zinc-950/40 border border-white/5 p-4 rounded-2xl space-y-3">
-                    <h4 className="text-xs font-bold font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-                      Registered Accounts
-                    </h4>
-                    {wizAccounts.length === 0 ? (
-                      <p className="text-xs text-zinc-500 italic">No accounts registered yet.</p>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {wizAccounts.map((acc) => (
-                          <div
-                            key={acc.id}
-                            className="flex justify-between items-center text-xs p-2 rounded-xl bg-black/20 border border-white/5 animate-fade-in"
-                          >
-                            <div>
-                              <p className="font-semibold text-zinc-200">{acc.name}</p>
-                              <p className="text-[10px] text-zinc-500 capitalize font-mono">
-                                {acc.type === "other" ? acc.customType || "Other" : acc.type}
-                              </p>
-                            </div>
-                            <span className="font-bold font-mono text-zinc-300">
-                              ${acc.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
                   <div className="bg-zinc-950/40 border border-white/5 p-4 rounded-2xl space-y-3">
                     <h4 className="text-xs font-bold font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
@@ -1615,21 +1177,6 @@ export const OnboardingWizard: React.FC = () => {
                     </h4>
 
                     <div className="space-y-2 font-mono text-xs text-zinc-300">
-                      <div className="flex justify-between items-center py-1.5 border-b border-white/5">
-                        <span>Starting Cash Balance</span>
-                        <span className="font-bold text-white">
-                          $
-                          {wizAccounts
-                            .reduce(
-                              (acc, a) => acc + a.balance,
-                              0
-                            )
-                            .toLocaleString("en-US", {
-                              minimumFractionDigits: 2,
-                            })}
-                        </span>
-                      </div>
-
                       <div className="flex justify-between items-center py-1.5 border-b border-white/5">
                         <span>Total Income</span>
                         <div className="text-right">
@@ -1811,6 +1358,14 @@ export const OnboardingWizard: React.FC = () => {
                       </div>
                     </div>
 
+                    <div className="mt-4 p-3 rounded-xl bg-indigo-950/20 border border-indigo-500/20 text-[11px] text-indigo-200 space-y-1 leading-relaxed font-sans font-medium">
+                      <p className="font-semibold text-indigo-100">💡 One more step after launch:</p>
+                      <p>
+                        Set your Current Balance from the profile menu → Settings once you&apos;re in,
+                        so your forecast starts from the right number.
+                      </p>
+                    </div>
+
                     <div className="mt-4 p-3 rounded-xl bg-zinc-900/60 border border-white/10 text-[11px] text-zinc-400 space-y-1 leading-relaxed font-sans font-medium">
                       <p className="font-semibold text-zinc-300">💡 Standardized Budgeting Baseline Note:</p>
                       <p>
@@ -1828,7 +1383,7 @@ export const OnboardingWizard: React.FC = () => {
                     <button
                       type="button"
                       disabled={isSaving}
-                      onClick={() => setWizActiveStep(4)}
+                      onClick={() => setWizActiveStep(3)}
                       className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                     >
                       <ArrowLeft className="w-4 h-4" />

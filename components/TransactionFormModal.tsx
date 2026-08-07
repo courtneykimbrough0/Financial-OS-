@@ -31,13 +31,12 @@ export const TransactionFormModal: React.FC = () => {
     setWizardStep,
     wizardError,
     setWizardError,
-    accounts,
     transactions,
-    launchDateStr,
     saveTransaction,
     markLiabilityPaidOff,
     isSaving,
   } = useFinancialData();
+  const todayStr = formatDateLocal(new Date());
 
   // Form Inputs local state
   const [formTitle, setFormTitle] = useState<string>("");
@@ -46,9 +45,6 @@ export const TransactionFormModal: React.FC = () => {
   const [formFrequency, setFormFrequency] = useState<string>("monthly");
   const [formSemiDays, setFormSemiDays] = useState<string>("1,15");
   const [formNotes, setFormNotes] = useState<string>("");
-  const [formAccountId, setFormAccountId] = useState<string>("");
-  const [formFundingAccountId, setFormFundingAccountId] = useState<string>("");
-  const [formTargetAccountId, setFormTargetAccountId] = useState<string>("");
 
   // Liability-specific inputs local state
   const [formDayOfMonth, setFormDayOfMonth] = useState<string>("1");
@@ -67,9 +63,6 @@ export const TransactionFormModal: React.FC = () => {
           setFormFrequency(tx.frequency);
           setFormSemiDays(tx.semiMonthlyDays ? tx.semiMonthlyDays.join(",") : "1,15");
           setFormNotes(tx.notes || "");
-          setFormAccountId(tx.accountId || "");
-          setFormFundingAccountId(tx.fundingAccountId || "");
-          setFormTargetAccountId(tx.targetAccountId || "");
           setFormDayOfMonth(tx.dayOfMonth || "1");
           setFormMovableDueDate(!!tx.movableDueDate);
           setFormMarkPaidOffDate(formatDateLocal(new Date()));
@@ -77,13 +70,10 @@ export const TransactionFormModal: React.FC = () => {
       } else {
         setFormTitle("");
         setFormAmount("");
-        setFormStartDate(launchDateStr);
+        setFormStartDate(todayStr);
         setFormFrequency(formCategory === "income" ? "biweekly" : "monthly");
         setFormSemiDays("1,15");
         setFormNotes("");
-        setFormAccountId("");
-        setFormFundingAccountId("");
-        setFormTargetAccountId("");
         setFormDayOfMonth("1");
         setFormMovableDueDate(false);
         setFormMarkPaidOffDate("");
@@ -97,7 +87,7 @@ export const TransactionFormModal: React.FC = () => {
     editingId,
     isAddingTransaction,
     formCategory,
-    launchDateStr,
+    todayStr,
     transactions,
     setWizardStep,
     setWizardError,
@@ -125,9 +115,6 @@ export const TransactionFormModal: React.FC = () => {
       category: formCategory,
       semiMonthlyDays: formSemiDays,
       notes: formNotes,
-      accountId: formAccountId,
-      fundingAccountId: formFundingAccountId,
-      targetAccountId: formTargetAccountId,
       dayOfMonth: formDayOfMonth,
       movableDueDate: formMovableDueDate,
     });
@@ -364,27 +351,6 @@ export const TransactionFormModal: React.FC = () => {
                   <form onSubmit={handleSave} className="space-y-4">
                     <div>
                       <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
-                        Deposit to Account
-                      </label>
-                      <select
-                        value={formAccountId}
-                        required
-                        disabled={isSaving}
-                        onChange={(e) => setFormAccountId(e.target.value)}
-                        className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-emerald-500 text-zinc-100 transition-colors cursor-pointer"
-                      >
-                        <option value="">Select an account...</option>
-                        {accounts
-                          .map((acc) => (
-                            <option key={acc.id} value={acc.id}>
-                              {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
                         First Pay Date
                       </label>
                       <input
@@ -424,12 +390,6 @@ export const TransactionFormModal: React.FC = () => {
                         <span>Amount & Frequency:</span>
                         <span className="font-semibold text-emerald-400 font-mono">
                           ${formAmount} ({formFrequency})
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-zinc-300">
-                        <span>Deposit To:</span>
-                        <span className="font-semibold text-white">
-                          {accounts.find((a) => a.id === formAccountId)?.name}
                         </span>
                       </div>
                       <div className="flex justify-between text-zinc-300">
@@ -712,72 +672,6 @@ export const TransactionFormModal: React.FC = () => {
                 {/* Step 3: Due Date & Final Review */}
                 {wizardStep === 3 && (
                   <form onSubmit={handleSave} className="space-y-4">
-                    {formCategory === "savings" ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
-                            From
-                          </label>
-                          <select
-                            value={formFundingAccountId}
-                            required
-                            disabled={isSaving}
-                            onChange={(e) => setFormFundingAccountId(e.target.value)}
-                            className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500 text-zinc-100 transition-colors cursor-pointer"
-                          >
-                            <option value="">Select an account...</option>
-                            {accounts
-                              .map((acc) => (
-                                <option key={acc.id} value={acc.id}>
-                                  {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
-                            To
-                          </label>
-                          <select
-                            value={formTargetAccountId}
-                            required
-                            disabled={isSaving}
-                            onChange={(e) => setFormTargetAccountId(e.target.value)}
-                            className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500 text-zinc-100 transition-colors cursor-pointer"
-                          >
-                            <option value="">Select an account...</option>
-                            {accounts
-                              .map((acc) => (
-                                <option key={acc.id} value={acc.id}>
-                                  {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
-                          Paid From Account
-                        </label>
-                        <select
-                          value={formAccountId}
-                          required
-                          disabled={isSaving}
-                          onChange={(e) => setFormAccountId(e.target.value)}
-                          className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-sky-500 text-zinc-100 transition-colors cursor-pointer"
-                        >
-                          <option value="">Select an account...</option>
-                          {accounts.map((acc) => (
-                            <option key={acc.id} value={acc.id}>
-                              {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
                     <div>
                       <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
                         Next Due Date
@@ -827,29 +721,6 @@ export const TransactionFormModal: React.FC = () => {
                           ${formAmount} ({formFrequency})
                         </span>
                       </div>
-                      {formCategory === "savings" ? (
-                        <>
-                          <div className="flex justify-between text-zinc-300">
-                            <span>From:</span>
-                            <span className="font-semibold text-white">
-                              {accounts.find((a) => a.id === formFundingAccountId)?.name}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-zinc-300">
-                            <span>To:</span>
-                            <span className="font-semibold text-white font-mono">
-                              {accounts.find((a) => a.id === formTargetAccountId)?.name}
-                            </span>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="flex justify-between text-zinc-300">
-                          <span>Paid From:</span>
-                          <span className="font-semibold text-white">
-                            {accounts.find((a) => a.id === formAccountId)?.name}
-                          </span>
-                        </div>
-                      )}
                       <div className="flex justify-between text-zinc-300">
                         <span>Next Due Date:</span>
                         <span className="font-semibold text-white font-mono">{formStartDate}</span>
@@ -1162,26 +1033,6 @@ export const TransactionFormModal: React.FC = () => {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-medium text-zinc-300 mb-1.5">
-                        Paid From Account
-                      </label>
-                      <select
-                        value={formFundingAccountId}
-                        required
-                        disabled={isSaving}
-                        onChange={(e) => setFormFundingAccountId(e.target.value)}
-                        className="block w-full px-3.5 py-2.5 text-xs bg-zinc-950 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 transition-colors cursor-pointer font-medium"
-                      >
-                        <option value="">Select an account...</option>
-                        {accounts.map((acc) => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
                     {/* Liability Summary Box */}
                     <div className="p-3.5 bg-amber-950/20 border border-amber-500/20 rounded-2xl flex flex-col gap-1.5 text-xs">
                       <div className="text-[10px] font-mono uppercase text-amber-400 font-bold tracking-wider">
@@ -1195,12 +1046,6 @@ export const TransactionFormModal: React.FC = () => {
                         <span>Amount & Frequency:</span>
                         <span className="font-semibold text-amber-400 font-mono">
                           ${formAmount} ({formFrequency})
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-zinc-300">
-                        <span>Paid From:</span>
-                        <span className="font-semibold text-white">
-                          {accounts.find((a) => a.id === formFundingAccountId)?.name}
                         </span>
                       </div>
                       <div className="flex justify-between text-zinc-300">

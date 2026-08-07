@@ -1,7 +1,7 @@
 // Data model and helpers for recurring transactions and forecasting
 import { getDaysInRange } from "@/lib/utils";
 
-export type TransactionCategory = 'income' | 'fixed-expense' | 'subscription' | 'liability' | 'savings' | 'transfer';
+export type TransactionCategory = 'income' | 'fixed-expense' | 'subscription' | 'liability' | 'savings';
 export type TransactionFrequency = 'daily' | 'weekly' | 'biweekly' | 'semimonthly' | 'monthly' | 'quarterly' | 'yearly' | 'onetime';
 
 export interface TransactionOverride {
@@ -14,15 +14,6 @@ export interface TransactionOverride {
   splits?: { id: string; amount: number; dateStr: string }[];
 }
 
-export interface Account {
-  id: string;
-  name: string;
-  type: 'checking' | 'savings' | 'other';
-  customType?: string; // Must be filled if type is 'other'
-  balance: number; // For cash accounts, current cash. For credit cards, outstanding balance (amount owed).
-  startDate?: string; // Starting date (YYYY-MM-DD) when the starting balance becomes active
-}
-
 export interface RecurringTransaction {
   id: string;
   title: string;
@@ -32,9 +23,6 @@ export interface RecurringTransaction {
   category: TransactionCategory;
   semiMonthlyDays?: number[]; // e.g. [1, 15]
   notes?: string;
-  accountId?: string; // Primary account connected (for income, fixed-expense, subscription)
-  fundingAccountId?: string; // Funding source (checking/savings) for liability/savings payments
-  targetAccountId?: string; // Destination account (e.g., savings account)
   dayOfMonth?: string; // Due day of month (e.g. "1".."31" or "Last")
   movableDueDate?: boolean; // Liability-only: whether this due date can be nudged (consumed by a later guidance issue)
   endDate?: string; // Ending date (YYYY-MM-DD) when the recurring transaction stops occurring
@@ -43,10 +31,10 @@ export interface RecurringTransaction {
 export interface ForecastDay {
   date: Date;
   dateStr: string; // YYYY-MM-DD
-  startingBalance: number; // Net total cash reserve (all cash accounts - credit card liabilities)
+  startingBalance: number; // Spendable pool balance at the start of the day
   incoming: number;
   outgoing: number; // Fixed, Subscriptions, Liabilities, Savings
-  endingBalance: number; // Net total cash reserve at end of day
+  endingBalance: number; // Spendable pool balance at the end of the day
   transactions: {
     item: RecurringTransaction;
     amount: number;
@@ -55,7 +43,6 @@ export interface ForecastDay {
     // Set when this entry is one part of a split payment: e.g. "2 of 3"
     splitLabel?: string;
   }[];
-  accountBalances: Record<string, number>; // Individual account balances at the end of the day
 }
 
 // Format date helper (YYYY-MM-DD local)
@@ -320,44 +307,20 @@ export function generateForecast({
   startDate,
   numberOfDays,
   initialBalance = 0,
-  accounts = [],
   transactions,
   overrides = [],
 }: {
   startDate: Date;
   numberOfDays: number;
   initialBalance?: number;
-  accounts?: Account[];
   transactions: RecurringTransaction[];
   overrides?: TransactionOverride[];
 }): ForecastDay[] {
   const forecast: ForecastDay[] = [];
-  
-  // Backwards compatibility check
-  let activeAccounts = [...accounts];
-  if (activeAccounts.length === 0) {
-    activeAccounts = [
-      {
-        id: "acc_checking",
-        name: "Primary Checking",
-        type: "checking",
-        balance: initialBalance,
-      }
-    ];
-  }
 
-  // Clone current account balances to simulate their progression
-  const currentBalances: Record<string, number> = {};
-  const initializedAccounts = new Set<string>();
-  for (const acc of activeAccounts) {
-    if (acc.startDate) {
-      currentBalances[acc.id] = 0;
-    } else {
-      currentBalances[acc.id] = acc.balance;
-      initializedAccounts.add(acc.id);
-    }
-  }
-  
+  // The single spendable pool's running balance.
+  let poolBalance = initialBalance;
+
   const end = new Date(startDate);
   end.setDate(startDate.getDate() + numberOfDays - 1);
 
@@ -396,25 +359,15 @@ export function generateForecast({
       overrideId?: string;
       splitLabel?: string;
     }[] = [];
-    
-    const dayStr = formatDateLocal(day);
 
-    // Activate any account starting on or before today
-    for (const acc of activeAccounts) {
-      if (acc.startDate && !initializedAccounts.has(acc.id) && dayStr >= acc.startDate) {
-        currentBalances[acc.id] = acc.balance;
-        initializedAccounts.add(acc.id);
-      }
-    }
-    
-    // Store starting balances for this day
-    const dayStartingBalances = { ...currentBalances };
-    
+    const dayStr = formatDateLocal(day);
+    const startingBalance = poolBalance;
+
     for (const t of transactions) {
       if (isTransactionOccurring(day, t)) {
         // Look up if there is an override for this transaction on this day
         const override = overrides.find(o => o.transactionId === t.id && o.dateStr === dayStr);
-        
+
         if (override && override.status === 'skipped') {
           continue; // Skip this transaction instance completely on this day
         }
@@ -422,69 +375,32 @@ export function generateForecast({
         if (override && override.status === 'split' && override.splits && override.splits.length > 0) {
           continue; // Occurrence is replaced by split sub-payments at their own dates
         }
-        
+
         let amt = t.amount;
         if (override && override.status === 'modified' && override.customAmount !== undefined) {
           amt = override.customAmount;
         }
-        
+
         if (t.category === 'income') {
           incoming += amt;
+          poolBalance += amt;
           dayTransactions.push({
             item: t,
             amount: amt,
             status: override ? override.status : undefined,
             overrideId: override ? override.id : undefined,
           });
-          
-          // Deposit into connected account
-          const accId = t.accountId;
-          if (accId && currentBalances[accId] !== undefined) {
-            currentBalances[accId] += amt;
-          }
         } else {
+          // Fixed expense, subscription, liability, and savings all debit
+          // the one spendable pool directly — no account indirection.
           outgoing += amt;
+          poolBalance -= amt;
           dayTransactions.push({
             item: t,
             amount: -amt,
             status: override ? override.status : undefined,
             overrideId: override ? override.id : undefined,
           });
-          
-          if (t.category === 'liability') {
-            // A liability payment simply debits the funding account — same
-            // shape as a fixed expense, just keyed off fundingAccountId.
-            const fundAccId = t.fundingAccountId;
-            if (fundAccId && currentBalances[fundAccId] !== undefined) {
-              currentBalances[fundAccId] -= amt;
-            }
-          } else if (t.category === 'savings') {
-            // Transfer from checking to savings
-            const fundAccId = t.fundingAccountId;
-            if (fundAccId && currentBalances[fundAccId] !== undefined) {
-              currentBalances[fundAccId] -= amt;
-            }
-            const targetAccId = t.targetAccountId;
-            if (targetAccId && currentBalances[targetAccId] !== undefined) {
-              currentBalances[targetAccId] += amt;
-            }
-          } else if (t.category === 'transfer') {
-            // General transfer between accounts
-            const fundAccId = t.fundingAccountId;
-            if (fundAccId && currentBalances[fundAccId] !== undefined) {
-              currentBalances[fundAccId] -= amt;
-            }
-            const targetAccId = t.targetAccountId;
-            if (targetAccId && currentBalances[targetAccId] !== undefined) {
-              currentBalances[targetAccId] += amt;
-            }
-          } else {
-            // Fixed expense or subscription paid from account
-            const accId = t.accountId;
-            if (accId && currentBalances[accId] !== undefined) {
-              currentBalances[accId] -= amt;
-            }
-          }
         }
       }
     }
@@ -500,95 +416,46 @@ export function generateForecast({
 
         if (t.category === 'income') {
           incoming += amt;
+          poolBalance += amt;
           dayTransactions.push({
             item: t,
             amount: amt,
             overrideId: part.overrideId,
             splitLabel,
           });
-
-          const accId = t.accountId;
-          if (accId && currentBalances[accId] !== undefined) {
-            currentBalances[accId] += amt;
-          }
           continue;
         }
 
         outgoing += amt;
+        poolBalance -= amt;
         dayTransactions.push({
           item: t,
           amount: -amt,
           overrideId: part.overrideId,
           splitLabel,
         });
-
-        if (t.category === 'liability') {
-          const fundAccId = t.fundingAccountId;
-          if (fundAccId && currentBalances[fundAccId] !== undefined) currentBalances[fundAccId] -= amt;
-        } else if (t.category === 'savings') {
-          const fundAccId = t.fundingAccountId;
-          if (fundAccId && currentBalances[fundAccId] !== undefined) currentBalances[fundAccId] -= amt;
-          const targetAccId = t.targetAccountId;
-          if (targetAccId && currentBalances[targetAccId] !== undefined) currentBalances[targetAccId] += amt;
-        } else if (t.category === 'transfer') {
-          const fundAccId = t.fundingAccountId;
-          if (fundAccId && currentBalances[fundAccId] !== undefined) currentBalances[fundAccId] -= amt;
-          const targetAccId = t.targetAccountId;
-          if (targetAccId && currentBalances[targetAccId] !== undefined) currentBalances[targetAccId] += amt;
-        } else {
-          const accId = t.accountId;
-          if (accId && currentBalances[accId] !== undefined) currentBalances[accId] -= amt;
-        }
       }
     }
 
-    // Net cash total is sum of cash accounts
-    let totalCashSum = 0;
-    for (const acc of activeAccounts) {
-      const bal = currentBalances[acc.id];
-      totalCashSum += bal;
-    }
-    
-    // Day starting net cash total
-    let totalStartCashSum = 0;
-    for (const acc of activeAccounts) {
-      const bal = dayStartingBalances[acc.id];
-      totalStartCashSum += bal;
-    }
-    
     forecast.push({
       date: day,
       dateStr: formatDateLocal(day),
-      startingBalance: totalStartCashSum,
+      startingBalance,
       incoming,
       outgoing,
-      endingBalance: totalCashSum,
+      endingBalance: poolBalance,
       transactions: dayTransactions,
-      accountBalances: { ...currentBalances },
     });
   }
-  
+
   return forecast;
 }
 
 // Default starting transactions is clean / empty for real user data
 export const DEFAULT_TRANSACTIONS: RecurringTransaction[] = [];
 
-// Sample Accounts
-export const SAMPLE_ACCOUNTS: Account[] = [
-  {
-    id: "acc_checking",
-    name: "Primary Checking",
-    type: "checking",
-    balance: 3500,
-  },
-  {
-    id: "acc_savings",
-    name: "Security Pot",
-    type: "savings",
-    balance: 1500,
-  }
-];
+// Sample starting balance for the "load sample data" onboarding shortcut.
+export const SAMPLE_STARTING_BALANCE = 5000;
 
 // Optional sample template data if requested
 export const SAMPLE_TRANSACTIONS: RecurringTransaction[] = [
@@ -600,7 +467,6 @@ export const SAMPLE_TRANSACTIONS: RecurringTransaction[] = [
     frequency: "semimonthly",
     category: "income",
     semiMonthlyDays: [1, 15],
-    accountId: "acc_checking",
     notes: "Primary salary deposit.",
   },
   {
@@ -610,7 +476,6 @@ export const SAMPLE_TRANSACTIONS: RecurringTransaction[] = [
     startDate: "2026-07-01",
     frequency: "monthly",
     category: "fixed-expense",
-    accountId: "acc_checking",
     notes: "Monthly apartment lease rent.",
   },
   {
@@ -620,7 +485,6 @@ export const SAMPLE_TRANSACTIONS: RecurringTransaction[] = [
     startDate: "2026-07-05",
     frequency: "monthly",
     category: "subscription",
-    accountId: "acc_checking",
     notes: "Premium media bundle.",
   },
   {
@@ -630,7 +494,6 @@ export const SAMPLE_TRANSACTIONS: RecurringTransaction[] = [
     startDate: "2026-07-20",
     frequency: "monthly",
     category: "liability",
-    fundingAccountId: "acc_checking",
     dayOfMonth: "20",
     movableDueDate: false,
     notes: "High interest rewards credit card balance.",
@@ -642,7 +505,6 @@ export const SAMPLE_TRANSACTIONS: RecurringTransaction[] = [
     startDate: "2026-07-12",
     frequency: "monthly",
     category: "liability",
-    fundingAccountId: "acc_checking",
     dayOfMonth: "12",
     movableDueDate: false,
     notes: "Fixed rate 5-year vehicle financing.",

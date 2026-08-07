@@ -9,7 +9,6 @@ export const DayDetailModal: React.FC = () => {
   const {
     selectedDay,
     setSelectedDay,
-    dashboardAccountFilter,
     lowBalanceAlerts,
     overrideEditingTxId,
     setOverrideEditingTxId,
@@ -89,16 +88,9 @@ export const DayDetailModal: React.FC = () => {
               </span>
               <span className="text-lg font-bold text-indigo-400 font-mono">
                 $
-                {dashboardAccountFilter && selectedDay.accountBalances
-                  ? (selectedDay.accountBalances[dashboardAccountFilter] ?? 0).toLocaleString(
-                      "en-US",
-                      {
-                        minimumFractionDigits: 2,
-                      }
-                    )
-                  : selectedDay.endingBalance.toLocaleString("en-US", {
-                      minimumFractionDigits: 2,
-                    })}
+                {selectedDay.endingBalance.toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                })}
               </span>
             </div>
             <div>
@@ -130,8 +122,7 @@ export const DayDetailModal: React.FC = () => {
               <div className="flex flex-col gap-1">
                 {lowBalanceDatesMap.get(selectedDay.dateStr)!.map((alert, alertIdx) => (
                   <p key={alertIdx} className="text-[11px] text-zinc-300 leading-normal">
-                    Account <span className="font-semibold text-white">{alert.accountName}</span>{" "}
-                    is projected to drop to{" "}
+                    Your balance is projected to drop to{" "}
                     <span className="font-mono font-bold text-amber-400">
                       ${alert.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </span>
