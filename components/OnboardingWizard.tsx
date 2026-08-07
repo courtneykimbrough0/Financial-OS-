@@ -62,11 +62,8 @@ export const OnboardingWizard: React.FC = () => {
   );
 
   // Liabilities step form inputs
-  const [wizLiabilityType, setWizLiabilityType] = useState<string>("card");
-  const [wizCurrentBalance, setWizCurrentBalance] = useState<string>("");
-  const [wizInterestRate, setWizInterestRate] = useState<string>("");
-  const [wizHasCreditLimit, setWizHasCreditLimit] = useState<boolean>(false);
-  const [wizCreditLimit, setWizCreditLimit] = useState<string>("");
+  const [wizDayOfMonth, setWizDayOfMonth] = useState<string>("1");
+  const [wizMovableDueDate, setWizMovableDueDate] = useState<boolean>(false);
 
   // Savings step form inputs
   const [wizSavingsEnabled, setWizSavingsEnabled] = useState<boolean>(false);
@@ -1119,76 +1116,32 @@ export const OnboardingWizard: React.FC = () => {
 
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                      Obligation Category
+                      Day of the Month
                     </label>
                     <select
-                      value={wizLiabilityType}
-                      onChange={(e) => setWizLiabilityType(e.target.value)}
-                      className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
+                      value={wizDayOfMonth}
+                      onChange={(e) => setWizDayOfMonth(e.target.value)}
+                      className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono font-medium cursor-pointer"
                     >
-                      <option value="card">Card</option>
-                      <option value="loan">Loan</option>
-                      <option value="line_of_credit">Line of Credit</option>
-                      <option value="one_time">One Time</option>
+                      {Array.from({ length: 30 }, (_, i) => String(i + 1))
+                        .concat(["Last"])
+                        .map((day) => (
+                          <option key={day} value={day}>
+                            {day}
+                          </option>
+                        ))}
                     </select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                        Balance Owed ($)
-                      </label>
-                      <input
-                        type="number"
-                        placeholder="0.00"
-                        value={wizCurrentBalance}
-                        onChange={(e) => setWizCurrentBalance(e.target.value)}
-                        className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono font-medium"
-                      />
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                        Interest Rate (%)
-                      </label>
-                      <input
-                        type="number"
-                        placeholder="e.g. 21.99"
-                        value={wizInterestRate}
-                        onChange={(e) => setWizInterestRate(e.target.value)}
-                        className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono font-medium"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-zinc-900/60 border border-white/5 rounded-xl space-y-2">
-                    <label className="flex items-center gap-2.5 cursor-pointer text-[11px] text-zinc-300 font-medium select-none">
-                      <input
-                        type="checkbox"
-                        checked={wizHasCreditLimit}
-                        onChange={(e) => {
-                          setWizHasCreditLimit(e.target.checked);
-                          if (!e.target.checked) setWizCreditLimit("");
-                        }}
-                        className="w-3.5 h-3.5 rounded border-white/20 bg-zinc-900 text-indigo-500 focus:ring-indigo-500/20 cursor-pointer"
-                      />
-                      <span>Has credit limit</span>
-                    </label>
-                    {wizHasCreditLimit && (
-                      <div className="pl-6 animate-fade-in">
-                        <label className="block text-[10px] font-bold font-mono tracking-wider text-zinc-500 uppercase mb-1">
-                          Credit Limit ($)
-                        </label>
-                        <input
-                          type="number"
-                          placeholder="e.g. 5000"
-                          value={wizCreditLimit}
-                          onChange={(e) => setWizCreditLimit(e.target.value)}
-                          className="bg-zinc-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono w-full"
-                        />
-                      </div>
-                    )}
-                  </div>
+                  <label className="flex items-center gap-2.5 cursor-pointer text-[11px] text-zinc-300 font-medium select-none p-3 bg-zinc-900/60 border border-white/5 rounded-xl">
+                    <input
+                      type="checkbox"
+                      checked={wizMovableDueDate}
+                      onChange={(e) => setWizMovableDueDate(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded border-white/20 bg-zinc-900 text-indigo-500 focus:ring-indigo-500/20 cursor-pointer"
+                    />
+                    <span>This due date can be moved a few days if needed</span>
+                  </label>
 
                   <div className="flex flex-col gap-1.5 font-sans">
                     <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
@@ -1234,21 +1187,16 @@ export const OnboardingWizard: React.FC = () => {
                         frequency: wizFrequency as any,
                         category: "liability",
                         fundingAccountId: wizFundingAccountId || undefined,
-                        liabilityType: wizLiabilityType as any,
-                        currentBalance: parseFloat(wizCurrentBalance) || undefined,
-                        interestRate: parseFloat(wizInterestRate) || undefined,
-                        creditLimit: wizHasCreditLimit ? parseFloat(wizCreditLimit) || undefined : undefined,
+                        dayOfMonth: wizDayOfMonth || undefined,
+                        movableDueDate: wizMovableDueDate,
                       };
                       setWizTransactions([...wizTransactions, payload]);
                       setWizTitle("");
                       setWizAmount("");
                       setWizFrequency("monthly");
                       setWizFundingAccountId("");
-                      setWizLiabilityType("card");
-                      setWizCurrentBalance("");
-                      setWizInterestRate("");
-                      setWizHasCreditLimit(false);
-                      setWizCreditLimit("");
+                      setWizDayOfMonth("1");
+                      setWizMovableDueDate(false);
                       setWizError(null);
                     }}
                     className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-md mt-2 cursor-pointer"

@@ -16,7 +16,7 @@ import {
   Circle,
 } from "lucide-react";
 import { useFinancialData } from "./FinancialOSContext";
-import { Account, ForecastDay, RecurringTransaction, formatDateLocal } from "@/lib/forecast";
+import { Account, ForecastDay, formatDateLocal } from "@/lib/forecast";
 
 const BUFFER = 100; // $100 amber threshold for both cash and available-credit signals
 
@@ -172,122 +172,16 @@ function buildDrillDown(acc: Account, timeline: ForecastDay[]): DayEntry[] {
     .filter((d) => d.items.length > 0);
 }
 
-// ─── credit line health ───────────────────────────────────────────────────────
-
-interface CreditHealth {
-  kind: "credit";
-  transaction: RecurringTransaction;
-  creditLimit: number;
-  currentAvailable: number;   // creditLimit − currentBalance (static stored value)
-  troughAvailable: number;    // lowest projected available credit before next payment
-  troughDateStr: string;
-  nextPaymentAmount: number | null;
-  nextPaymentDateStr: string | null;
-  signal: "green" | "amber" | "red";
-}
-
-interface CreditDayEntry {
-  dateStr: string;
-  paymentAmount: number;     // scheduled payment on this day
-  closingAvailable: number;  // available credit after payment
-}
-
-function computeCreditHealth(tx: RecurringTransaction, timeline: ForecastDay[]): CreditHealth {
-  const limit = tx.creditLimit ?? 0;
-  const currentAvailable = limit - (tx.currentBalance ?? 0);
-
-  // Same today-forward bound as computeHealth() — see its comment.
-  const todayStr = formatDateLocal(new Date());
-  const relevant = timeline.filter(
-    (d) => d.accountBalances[tx.id] !== undefined && d.dateStr >= todayStr
-  );
-
-  if (relevant.length === 0 || limit === 0) {
-    const signal: CreditHealth["signal"] =
-      currentAvailable <= 0 ? "red" : currentAvailable < BUFFER ? "amber" : "green";
-    return {
-      kind: "credit",
-      transaction: tx,
-      creditLimit: limit,
-      currentAvailable,
-      troughAvailable: currentAvailable,
-      troughDateStr: "",
-      nextPaymentAmount: null,
-      nextPaymentDateStr: null,
-      signal,
-    };
-  }
-
-  // Next scheduled payment FIRST — used to scope the trough scan.
-  let nextPaymentAmount: number | null = null;
-  let nextPaymentDateStr: string | null = null;
-  for (const day of relevant) {
-    const payment = day.transactions.find((t) => t.item.id === tx.id && t.amount < 0);
-    if (payment) {
-      nextPaymentAmount = Math.abs(payment.amount);
-      nextPaymentDateStr = day.dateStr;
-      break;
-    }
-  }
-
-  // Trough: lowest projected available credit strictly BEFORE the next payment.
-  // Between payments, the balance only grows (via interest), so available credit
-  // only shrinks — the payment is the positive event, mirroring cash's deposit.
-  let troughAvailable = currentAvailable;
-  let troughDateStr = relevant[0].dateStr;
-  for (const day of relevant) {
-    if (nextPaymentDateStr && day.dateStr >= nextPaymentDateStr) break;
-    const available = limit - (day.accountBalances[tx.id] ?? (tx.currentBalance ?? 0));
-    if (available < troughAvailable) {
-      troughAvailable = available;
-      troughDateStr = day.dateStr;
-    }
-  }
-
-  const signal: CreditHealth["signal"] =
-    troughAvailable <= 0 ? "red" : troughAvailable < BUFFER ? "amber" : "green";
-
-  return {
-    kind: "credit",
-    transaction: tx,
-    creditLimit: limit,
-    currentAvailable,
-    troughAvailable,
-    troughDateStr,
-    nextPaymentAmount,
-    nextPaymentDateStr,
-    signal,
-  };
-}
-
-function buildCreditDrillDown(tx: RecurringTransaction, timeline: ForecastDay[]): CreditDayEntry[] {
-  const limit = tx.creditLimit ?? 0;
-  return timeline
-    .filter(
-      (d) =>
-        d.accountBalances[tx.id] !== undefined &&
-        d.transactions.some((t) => t.item.id === tx.id && t.amount < 0)
-    )
-    .map((day) => {
-      const payment = day.transactions.find((t) => t.item.id === tx.id && t.amount < 0)!;
-      return {
-        dateStr: day.dateStr,
-        paymentAmount: Math.abs(payment.amount),
-        closingAvailable: limit - (day.accountBalances[tx.id] ?? (tx.currentBalance ?? 0)),
-      };
-    });
-}
-
 // ─── shared ───────────────────────────────────────────────────────────────────
 
-type RowHealth = AccountHealth | CreditHealth;
+type RowHealth = AccountHealth;
 
 function rowId(h: RowHealth): string {
-  return h.kind === "cash" ? h.account.id : h.transaction.id;
+  return h.account.id;
 }
 
 function rowName(h: RowHealth): string {
-  return h.kind === "cash" ? h.account.name : h.transaction.title;
+  return h.account.name;
 }
 
 function SignalDot({ signal }: { signal: RowHealth["signal"] }) {
@@ -643,307 +537,10 @@ function DrillDown({
   );
 }
 
-// ─── credit strip row ─────────────────────────────────────────────────────────
-
-function CreditStripRow({ health, onClick }: { health: CreditHealth; onClick: () => void }) {
-  const {
-    transaction: tx,
-    creditLimit,
-    currentAvailable,
-    troughAvailable,
-    troughDateStr,
-    nextPaymentAmount,
-    nextPaymentDateStr,
-    signal,
-  } = health;
-
-  const typeLabel =
-    tx.liabilityType === "card"
-      ? "credit card"
-      : tx.liabilityType === "line_of_credit"
-      ? "line of credit"
-      : "liability";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full text-left p-4 sm:p-5 bg-zinc-900/40 border border-white/5 hover:border-white/15 hover:bg-zinc-900/60 rounded-2xl transition-all group flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-0"
-    >
-      {/* Card name + type */}
-      <div className="flex items-center gap-3 sm:w-56 shrink-0">
-        <SignalDot signal={signal} />
-        <div className="p-2 rounded-xl border bg-amber-500/10 text-amber-400 border-amber-500/20">
-          <CreditCard className="w-4 h-4" />
-        </div>
-        <div>
-          <div className="text-sm font-bold text-zinc-100 leading-tight">{tx.title}</div>
-          <div className="text-[10px] font-mono text-zinc-500 uppercase mt-0.5">
-            {typeLabel} · ${fmt(creditLimit)} limit
-          </div>
-        </div>
-      </div>
-
-      {/* Current available */}
-      <div className="sm:flex-1 sm:text-center">
-        <div className="text-[10px] font-mono text-zinc-500 uppercase">Available</div>
-        <div className="text-sm font-bold font-mono text-zinc-200 mt-0.5">
-          ${fmt(currentAvailable)}
-        </div>
-      </div>
-
-      {/* Trough available */}
-      <div className="sm:flex-1 sm:text-center">
-        <div className="text-[10px] font-mono text-zinc-500 uppercase">Lowest Avail</div>
-        <div
-          className={`text-sm font-bold font-mono mt-0.5 ${
-            signal === "red" ? "text-red-400" : signal === "amber" ? "text-amber-400" : "text-zinc-300"
-          }`}
-        >
-          ${fmt(troughAvailable)}
-        </div>
-        {troughDateStr && (
-          <div className="text-[9px] font-mono text-zinc-600 mt-0.5">{fmtShort(troughDateStr)}</div>
-        )}
-      </div>
-
-      {/* Next payment */}
-      <div className="sm:flex-1 sm:text-center">
-        <div className="text-[10px] font-mono text-zinc-500 uppercase">Next Payment</div>
-        {nextPaymentAmount !== null && nextPaymentDateStr ? (
-          <>
-            <div className="text-sm font-bold font-mono text-sky-400 mt-0.5">
-              ${fmt(nextPaymentAmount)}
-            </div>
-            <div className="text-[9px] font-mono text-zinc-600 mt-0.5">
-              {fmtShort(nextPaymentDateStr)}
-            </div>
-          </>
-        ) : (
-          <div className="text-sm font-mono text-zinc-600 mt-0.5">—</div>
-        )}
-      </div>
-
-      {/* Signal badge */}
-      <div className="sm:w-28 sm:text-right flex sm:justify-end items-center gap-2">
-        <span
-          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono uppercase border ${
-            signal === "green"
-              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-              : signal === "amber"
-              ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-              : "bg-red-500/10 text-red-400 border-red-500/20"
-          }`}
-        >
-          {signal === "green" ? "Healthy" : signal === "amber" ? "Tight" : "Over Limit"}
-        </span>
-        <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300 transition-colors shrink-0" />
-      </div>
-    </button>
-  );
-}
-
-// ─── credit drill-down ────────────────────────────────────────────────────────
-
-function CreditDrillDown({
-  health,
-  allRows,
-  onBack,
-  onSwitch,
-}: {
-  health: CreditHealth;
-  allRows: RowHealth[];
-  onBack: () => void;
-  onSwitch: (id: string) => void;
-}) {
-  const { calendarForecastTimeline } = useFinancialData();
-  const days = useMemo(
-    () => buildCreditDrillDown(health.transaction, calendarForecastTimeline),
-    [health.transaction, calendarForecastTimeline]
-  );
-
-  const tx = health.transaction;
-  const typeLabel =
-    tx.liabilityType === "card"
-      ? "Credit Card"
-      : tx.liabilityType === "line_of_credit"
-      ? "Line of Credit"
-      : "Liability";
-
-  return (
-    <motion.div
-      key={tx.id}
-      initial={{ opacity: 0, x: 24 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -24 }}
-      transition={{ duration: 0.18 }}
-      className="flex flex-col gap-4"
-    >
-      {/* Back + card name */}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg border bg-amber-500/10 text-amber-400 border-amber-500/20">
-            <CreditCard className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-white">{tx.title}</h3>
-            <div className="text-[10px] font-mono text-zinc-500 uppercase">{typeLabel}</div>
-          </div>
-        </div>
-        <div className="ml-auto">
-          <SignalDot signal={health.signal} />
-        </div>
-      </div>
-
-      {/* Chip switcher — spans all accounts and credit lines */}
-      <ChipSwitcher allRows={allRows} activeId={tx.id} onSwitch={onSwitch} />
-
-      {/* Summary strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-3.5 bg-zinc-900/40 border border-white/5 rounded-2xl">
-          <div className="text-[9px] font-mono text-zinc-500 uppercase">Available</div>
-          <div className="text-sm font-bold font-mono text-zinc-200 mt-1">
-            ${fmt(health.currentAvailable)}
-          </div>
-          <div className="text-[9px] font-mono text-zinc-600 mt-0.5">
-            of ${fmt(health.creditLimit)} limit
-          </div>
-        </div>
-        <div className="p-3.5 bg-zinc-900/40 border border-white/5 rounded-2xl">
-          <div className="text-[9px] font-mono text-zinc-500 uppercase">Lowest Before Payment</div>
-          <div
-            className={`text-sm font-bold font-mono mt-1 ${
-              health.signal === "red"
-                ? "text-red-400"
-                : health.signal === "amber"
-                ? "text-amber-400"
-                : "text-zinc-200"
-            }`}
-          >
-            ${fmt(health.troughAvailable)}
-          </div>
-          {health.troughDateStr && (
-            <div className="text-[9px] font-mono text-zinc-600 mt-0.5">
-              {fmtShort(health.troughDateStr)}
-            </div>
-          )}
-        </div>
-        <div className="p-3.5 bg-zinc-900/40 border border-white/5 rounded-2xl">
-          <div className="text-[9px] font-mono text-zinc-500 uppercase">Next Payment</div>
-          {health.nextPaymentAmount !== null ? (
-            <div className="text-sm font-bold font-mono text-sky-400 mt-1">
-              ${fmt(health.nextPaymentAmount)}
-            </div>
-          ) : (
-            <div className="text-sm font-mono text-zinc-600 mt-1">None scheduled</div>
-          )}
-          {health.nextPaymentDateStr && (
-            <div className="text-[9px] font-mono text-zinc-600 mt-0.5">
-              {fmtShort(health.nextPaymentDateStr)}
-            </div>
-          )}
-        </div>
-        <div
-          className={`p-3.5 rounded-2xl border ${
-            health.signal === "green"
-              ? "bg-emerald-500/5 border-emerald-500/15"
-              : health.signal === "amber"
-              ? "bg-amber-500/5 border-amber-500/15"
-              : "bg-red-500/5 border-red-500/15"
-          }`}
-        >
-          <div className="text-[9px] font-mono text-zinc-500 uppercase">Status</div>
-          <div
-            className={`text-sm font-bold font-mono mt-1 flex items-center gap-1.5 ${
-              health.signal === "green"
-                ? "text-emerald-400"
-                : health.signal === "amber"
-                ? "text-amber-400"
-                : "text-red-400"
-            }`}
-          >
-            {health.signal === "green" ? (
-              <CheckCircle2 className="w-3.5 h-3.5" />
-            ) : health.signal === "amber" ? (
-              <AlertTriangle className="w-3.5 h-3.5" />
-            ) : (
-              <TrendingDown className="w-3.5 h-3.5" />
-            )}
-            {health.signal === "green"
-              ? "Healthy"
-              : health.signal === "amber"
-              ? "Running Tight"
-              : "Over Limit"}
-          </div>
-        </div>
-      </div>
-
-      {/* Scheduled payment days */}
-      <div className="bg-zinc-900/30 border border-white/10 rounded-[2rem] p-4 sm:p-5 flex flex-col gap-0 overflow-hidden">
-        <h4 className="text-xs font-bold font-mono text-zinc-400 uppercase mb-3 px-1">
-          Scheduled Payments
-        </h4>
-        {days.length === 0 ? (
-          <div className="py-8 text-center text-zinc-600 text-xs font-mono italic">
-            No payments scheduled in this window.
-          </div>
-        ) : (
-          <div className="flex flex-col divide-y divide-white/5">
-            {days.map((d) => {
-              const isTight = d.closingAvailable < BUFFER && d.closingAvailable >= 0;
-              const isOver = d.closingAvailable < 0;
-              return (
-                <div key={d.dateStr} className="py-3 px-1 flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold font-mono text-zinc-500 uppercase">
-                      {fmtShort(d.dateStr)}
-                    </span>
-                    <span
-                      className={`text-xs font-bold font-mono ${
-                        isOver
-                          ? "text-red-400"
-                          : isTight
-                          ? "text-amber-400"
-                          : "text-zinc-300"
-                      }`}
-                    >
-                      ${fmt(d.closingAvailable)} avail
-                      {(isOver || isTight) && (
-                        <AlertTriangle className="inline w-3 h-3 ml-1 align-[-1px]" />
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between pl-2 text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <ArrowUpRight className="w-3 h-3 text-sky-400 shrink-0" />
-                      <span className="text-zinc-400 truncate">{tx.title}</span>
-                      <span className="text-[9px] font-mono text-amber-400 shrink-0">liability</span>
-                    </div>
-                    <span className="font-mono font-bold text-sky-400 shrink-0 ml-2">
-                      +${fmt(d.paymentAmount)} credit
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
 // ─── main export ─────────────────────────────────────────────────────────────
 
 export const AccountHealthView: React.FC = () => {
-  const { accounts, transactions, calendarForecastTimeline, loading } = useFinancialData();
+  const { accounts, calendarForecastTimeline, loading } = useFinancialData();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const allHealth = useMemo(
@@ -951,34 +548,10 @@ export const AccountHealthView: React.FC = () => {
     [accounts, calendarForecastTimeline]
   );
 
-  const creditTransactions = useMemo(
-    () =>
-      transactions.filter(
-        (t) =>
-          t.category === "liability" &&
-          (t.liabilityType === "card" || t.liabilityType === "line_of_credit") &&
-          t.creditLimit !== undefined &&
-          t.creditLimit > 0 &&
-          t.currentBalance !== undefined
-      ),
-    [transactions]
-  );
-
-  const allCreditHealth = useMemo(
-    () => creditTransactions.map((tx) => computeCreditHealth(tx, calendarForecastTimeline)),
-    [creditTransactions, calendarForecastTimeline]
-  );
-
-  const allRows: RowHealth[] = useMemo(
-    () => [...allHealth, ...allCreditHealth],
-    [allHealth, allCreditHealth]
-  );
+  const allRows: RowHealth[] = allHealth;
 
   const selectedCashHealth = selectedId
     ? (allHealth.find((h) => h.account.id === selectedId) ?? null)
-    : null;
-  const selectedCreditHealth = selectedId
-    ? (allCreditHealth.find((h) => h.transaction.id === selectedId) ?? null)
     : null;
 
   if (loading) {
@@ -1015,14 +588,6 @@ export const AccountHealthView: React.FC = () => {
             onBack={() => setSelectedId(null)}
             onSwitch={setSelectedId}
           />
-        ) : selectedCreditHealth ? (
-          <CreditDrillDown
-            key={selectedCreditHealth.transaction.id}
-            health={selectedCreditHealth}
-            allRows={allRows}
-            onBack={() => setSelectedId(null)}
-            onSwitch={setSelectedId}
-          />
         ) : (
           <motion.div
             key="strip"
@@ -1034,8 +599,8 @@ export const AccountHealthView: React.FC = () => {
           >
             {/* Legend row */}
             <div className="hidden sm:flex items-center text-[9px] font-mono text-zinc-600 uppercase px-5 gap-0">
-              <div className="w-56 shrink-0">Account / Card</div>
-              <div className="flex-1 text-center">Now / Available</div>
+              <div className="w-56 shrink-0">Account</div>
+              <div className="flex-1 text-center">Now</div>
               <div className="flex-1 text-center">Lowest</div>
               <div className="flex-1 text-center">Next Event</div>
               <div className="w-28 text-right">Status</div>
@@ -1050,30 +615,10 @@ export const AccountHealthView: React.FC = () => {
               />
             ))}
 
-            {/* Credit card / line-of-credit rows */}
-            {allCreditHealth.length > 0 && (
-              <>
-                <div className="flex items-center gap-3 px-1 pt-2">
-                  <div className="flex-1 h-px bg-white/5" />
-                  <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest shrink-0">
-                    Credit Lines
-                  </span>
-                  <div className="flex-1 h-px bg-white/5" />
-                </div>
-                {allCreditHealth.map((h) => (
-                  <CreditStripRow
-                    key={h.transaction.id}
-                    health={h}
-                    onClick={() => setSelectedId(h.transaction.id)}
-                  />
-                ))}
-              </>
-            )}
-
             {/* Buffer note */}
             <p className="text-[10px] text-zinc-600 font-mono text-center pt-1">
               <Circle className="inline w-1.5 h-1.5 mr-1 align-[1px] fill-amber-400 stroke-amber-400" />
-              Amber when projected balance or available credit falls below ${BUFFER.toLocaleString()} — click any row to see the full activity breakdown.
+              Amber when projected balance falls below ${BUFFER.toLocaleString()} — click any row to see the full activity breakdown.
             </p>
           </motion.div>
         )}

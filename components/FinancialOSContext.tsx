@@ -145,6 +145,7 @@ interface FinancialOSContextType {
     txInput: Parameters<typeof validateTransactionInput>[0] & { id?: string }
   ) => Promise<boolean>;
   deleteTransactionById: (txId: string) => Promise<boolean>;
+  markLiabilityPaidOff: (txId: string, asOfDateStr: string) => Promise<boolean>;
   toggleVerifyOverride: (transactionId: string, dateStr: string) => Promise<void>;
   skipOverride: (transactionId: string, dateStr: string) => Promise<void>;
   modifyAmountOverride: (transactionId: string, dateStr: string, customAmt: number) => Promise<void>;
@@ -573,6 +574,31 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     } catch (err: any) {
       setTransactions(previousTransactions); // Rollback
       setAlertMessage(err.message || "Failed to delete transaction from database.");
+      setIsSaving(false);
+      return false;
+    }
+  };
+
+  const markLiabilityPaidOff = async (txId: string, asOfDateStr: string): Promise<boolean> => {
+    if (!userId) return false;
+    const existing = transactions.find((t) => t.id === txId);
+    if (!existing) return false;
+
+    setIsSaving(true);
+    const previousTransactions = [...transactions];
+    const updated: RecurringTransaction = { ...existing, endDate: asOfDateStr };
+
+    // Optimistic Update
+    setTransactions((prev) => prev.map((t) => (t.id === txId ? updated : t)));
+
+    try {
+      const saved = await updateTransaction(supabase, updated, userId);
+      setTransactions((prev) => prev.map((t) => (t.id === txId ? saved : t)));
+      setIsSaving(false);
+      return true;
+    } catch (err: any) {
+      setTransactions(previousTransactions); // Rollback
+      setAlertMessage(err.message || "Failed to mark liability as paid off.");
       setIsSaving(false);
       return false;
     }
@@ -1072,6 +1098,7 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
         deleteAccountWithStrategy,
         saveTransaction,
         deleteTransactionById,
+        markLiabilityPaidOff,
         toggleVerifyOverride,
         skipOverride,
         modifyAmountOverride,

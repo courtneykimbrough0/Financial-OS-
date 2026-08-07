@@ -11,11 +11,13 @@ import {
   Clock,
   Zap,
   Calendar as CalendarIcon,
+  CheckCircle2,
   Flame,
   Snowflake,
   Target,
 } from "lucide-react";
 import { useFinancialData } from "./FinancialOSContext";
+import { formatDateLocal } from "@/lib/forecast";
 
 export const TransactionFormModal: React.FC = () => {
   const {
@@ -33,6 +35,7 @@ export const TransactionFormModal: React.FC = () => {
     transactions,
     launchDateStr,
     saveTransaction,
+    markLiabilityPaidOff,
     isSaving,
   } = useFinancialData();
 
@@ -48,21 +51,9 @@ export const TransactionFormModal: React.FC = () => {
   const [formTargetAccountId, setFormTargetAccountId] = useState<string>("");
 
   // Liability-specific inputs local state
-  const [formLiabilityType, setFormLiabilityType] = useState<string>("card");
-  const [formInterestRate, setFormInterestRate] = useState<string>("");
-  const [formCurrentBalance, setFormCurrentBalance] = useState<string>("");
-  const [formStartingBalance, setFormStartingBalance] = useState<string>("");
-  const [formCreditLimit, setFormCreditLimit] = useState<string>("");
-  const [formMinimumPayment, setFormMinimumPayment] = useState<string>("");
-  const [formHasCreditLimit, setFormHasCreditLimit] = useState<boolean>(false);
-  const [formHasBalanceTransferFee, setFormHasBalanceTransferFee] = useState<boolean>(false);
-  const [formBalanceTransferFee, setFormBalanceTransferFee] = useState<string>("");
-  const [formBalanceTransferFeeMin, setFormBalanceTransferFeeMin] = useState<string>("");
-  const [formHasPromoPeriod, setFormHasPromoPeriod] = useState<boolean>(false);
-  const [formPromoRate, setFormPromoRate] = useState<string>("");
-  const [formPromoEndDate, setFormPromoEndDate] = useState<string>("");
-  const [formMinPaymentCalc, setFormMinPaymentCalc] = useState<string>("fixed");
   const [formDayOfMonth, setFormDayOfMonth] = useState<string>("1");
+  const [formMovableDueDate, setFormMovableDueDate] = useState<boolean>(false);
+  const [formMarkPaidOffDate, setFormMarkPaidOffDate] = useState<string>("");
 
   // Populate form if editing, or set defaults if creating
   useEffect(() => {
@@ -79,25 +70,9 @@ export const TransactionFormModal: React.FC = () => {
           setFormAccountId(tx.accountId || "");
           setFormFundingAccountId(tx.fundingAccountId || "");
           setFormTargetAccountId(tx.targetAccountId || "");
-          setFormLiabilityType(tx.liabilityType || "card");
-          setFormInterestRate(tx.interestRate !== undefined ? String(tx.interestRate) : "");
-          setFormCurrentBalance(tx.currentBalance !== undefined ? String(tx.currentBalance) : "");
-          setFormStartingBalance(tx.startingBalance !== undefined ? String(tx.startingBalance) : "");
-          setFormCreditLimit(tx.creditLimit !== undefined ? String(tx.creditLimit) : "");
-          setFormMinimumPayment(tx.minimumPayment !== undefined ? String(tx.minimumPayment) : "");
-          setFormHasCreditLimit(tx.creditLimit !== undefined && tx.creditLimit > 0);
-          setFormHasBalanceTransferFee(tx.balanceTransferFee !== undefined);
-          setFormBalanceTransferFee(
-            tx.balanceTransferFee !== undefined ? String(tx.balanceTransferFee) : ""
-          );
-          setFormBalanceTransferFeeMin(
-            tx.balanceTransferFeeMin !== undefined ? String(tx.balanceTransferFeeMin) : ""
-          );
-          setFormHasPromoPeriod(tx.promoRate !== undefined || !!tx.promoEndDate);
-          setFormPromoRate(tx.promoRate !== undefined ? String(tx.promoRate) : "");
-          setFormPromoEndDate(tx.promoEndDate || "");
-          setFormMinPaymentCalc(tx.minimumPaymentCalc || "fixed");
           setFormDayOfMonth(tx.dayOfMonth || "1");
+          setFormMovableDueDate(!!tx.movableDueDate);
+          setFormMarkPaidOffDate(formatDateLocal(new Date()));
         }
       } else {
         setFormTitle("");
@@ -109,21 +84,9 @@ export const TransactionFormModal: React.FC = () => {
         setFormAccountId("");
         setFormFundingAccountId("");
         setFormTargetAccountId("");
-        setFormLiabilityType("card");
-        setFormInterestRate("");
-        setFormCurrentBalance("");
-        setFormStartingBalance("");
-        setFormCreditLimit("");
-        setFormMinimumPayment("");
-        setFormHasCreditLimit(false);
-        setFormHasBalanceTransferFee(false);
-        setFormBalanceTransferFee("");
-        setFormBalanceTransferFeeMin("");
-        setFormHasPromoPeriod(false);
-        setFormPromoRate("");
-        setFormPromoEndDate("");
-        setFormMinPaymentCalc("fixed");
         setFormDayOfMonth("1");
+        setFormMovableDueDate(false);
+        setFormMarkPaidOffDate("");
       }
       setWizardStep(1);
       setWizardError(null);
@@ -165,21 +128,8 @@ export const TransactionFormModal: React.FC = () => {
       accountId: formAccountId,
       fundingAccountId: formFundingAccountId,
       targetAccountId: formTargetAccountId,
-      liabilityType: formLiabilityType,
-      interestRate: formInterestRate,
-      currentBalance: formCurrentBalance,
-      startingBalance: formStartingBalance,
-      creditLimit: formCreditLimit,
-      minimumPayment: formMinimumPayment,
-      balanceTransferFee: formBalanceTransferFee,
-      balanceTransferFeeMin: formBalanceTransferFeeMin,
-      promoRate: formPromoRate,
-      promoEndDate: formPromoEndDate,
-      minimumPaymentCalc: formMinPaymentCalc,
       dayOfMonth: formDayOfMonth,
-      hasCreditLimit: formHasCreditLimit,
-      hasBalanceTransferFee: formHasBalanceTransferFee,
-      hasPromoPeriod: formHasPromoPeriod,
+      movableDueDate: formMovableDueDate,
     });
 
     if (success) {
@@ -951,15 +901,16 @@ export const TransactionFormModal: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
-                      {wizardStep === 1
-                        ? "Loan Description"
-                        : wizardStep === 2
-                        ? "Terms"
-                        : wizardStep === 3
-                        ? "Payment Details"
-                        : "Review & Payoff"}
+                      {editingId ? "Edit Liability Wizard" : "Liability Wizard"}
                     </h3>
-                    <p className="text-xs text-zinc-400 font-medium">Step {wizardStep} of 4</p>
+                    <p className="text-xs text-zinc-400">
+                      Step {wizardStep} of 3 &bull;{" "}
+                      {wizardStep === 1
+                        ? "Name"
+                        : wizardStep === 2
+                        ? "Amount & Schedule"
+                        : "Due Date & Review"}
+                    </p>
                   </div>
                 </div>
 
@@ -990,11 +941,6 @@ export const TransactionFormModal: React.FC = () => {
                     wizardStep >= 3 ? "bg-amber-500" : "bg-zinc-800"
                   }`}
                 />
-                <div
-                  className={`flex-1 h-1.5 rounded-full transition-all ${
-                    wizardStep >= 4 ? "bg-amber-500" : "bg-zinc-800"
-                  }`}
-                />
               </div>
 
               {/* Wizard Form Content */}
@@ -1012,28 +958,12 @@ export const TransactionFormModal: React.FC = () => {
                   </div>
                 )}
 
-                {/* Step 1: Loan Description */}
+                {/* Step 1: Name */}
                 {wizardStep === 1 && (
                   <div className="space-y-4">
                     <div>
                       <label className="block text-xs font-medium text-zinc-300 mb-1.5">
-                        Category *
-                      </label>
-                      <select
-                        value={formLiabilityType}
-                        onChange={(e) => setFormLiabilityType(e.target.value)}
-                        className="block w-full px-3.5 py-2.5 text-xs bg-zinc-950 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 transition-colors cursor-pointer font-medium"
-                      >
-                        <option value="card">Card</option>
-                        <option value="loan">Loan</option>
-                        <option value="line_of_credit">Line of Credit</option>
-                        <option value="one_time">One Time</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-zinc-300 mb-1.5">
-                        Nickname *
+                        Liability Name *
                       </label>
                       <input
                         type="text"
@@ -1074,7 +1004,7 @@ export const TransactionFormModal: React.FC = () => {
                         type="button"
                         onClick={() => {
                           if (!formTitle.trim()) {
-                            setWizardError("Please enter a Nickname for this liability.");
+                            setWizardError("Please enter a Liability Name.");
                             return;
                           }
                           setWizardError(null);
@@ -1082,20 +1012,19 @@ export const TransactionFormModal: React.FC = () => {
                         }}
                         className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition-colors shadow-lg shadow-amber-950/50 flex items-center gap-1.5 cursor-pointer"
                       >
-                        <span>Next</span>
+                        <span>Next: Amount & Schedule</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
                 )}
 
-                {/* Step 2: Terms */}
+                {/* Step 2: Amount & Schedule */}
                 {wizardStep === 2 && (
                   <div className="space-y-4">
-                    {/* Current balance */}
                     <div>
                       <label className="block text-xs font-medium text-amber-400 mb-1.5">
-                        Current balance *
+                        Scheduled payment amount ($) *
                       </label>
                       <div className="relative">
                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 text-xs font-mono font-bold">
@@ -1103,298 +1032,18 @@ export const TransactionFormModal: React.FC = () => {
                         </span>
                         <input
                           type="number"
-                          min="0"
+                          min="0.01"
                           step="any"
                           required
-                          placeholder="0.00"
-                          value={formCurrentBalance}
+                          autoFocus
+                          placeholder="e.g. 195"
+                          value={formAmount}
                           onChange={(e) => {
-                            setFormCurrentBalance(e.target.value);
+                            setFormAmount(e.target.value);
                             if (wizardError) setWizardError(null);
                           }}
                           className="block w-full pl-8 pr-3.5 py-2.5 text-xs bg-zinc-950 border border-amber-500/40 rounded-xl focus:outline-none focus:border-amber-400 text-zinc-100 font-mono transition-colors font-medium"
                         />
-                      </div>
-                    </div>
-
-                    {/* APR */}
-                    <div>
-                      <label className="block text-xs font-medium text-zinc-300 mb-1.5">
-                        Interest Rate (%) *
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="any"
-                          required
-                          placeholder="e.g. 29.99"
-                          value={formInterestRate}
-                          onChange={(e) => {
-                            setFormInterestRate(e.target.value);
-                            if (wizardError) setWizardError(null);
-                          }}
-                          className="block w-full pr-8 pl-3.5 py-2.5 text-xs bg-zinc-950 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 font-mono transition-colors font-medium"
-                        />
-                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 text-xs font-mono font-bold">
-                          %
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Features Toggles */}
-                    <div className="space-y-3 pt-2">
-                      <div className="p-3 bg-zinc-950/60 border border-white/5 rounded-xl space-y-2">
-                        <label className="flex items-center gap-2.5 cursor-pointer text-xs text-zinc-200 font-medium">
-                          <input
-                            type="checkbox"
-                            checked={formHasCreditLimit}
-                            onChange={(e) => {
-                              setFormHasCreditLimit(e.target.checked);
-                              if (!e.target.checked) setFormCreditLimit("");
-                            }}
-                            className="w-4 h-4 rounded border-white/20 bg-zinc-900 text-amber-500 focus:ring-amber-500/20 cursor-pointer"
-                          />
-                          <span>Has credit limit</span>
-                        </label>
-                        {formHasCreditLimit && (
-                          <div className="pt-2 pl-6">
-                            <label className="block text-xs font-medium text-zinc-400 mb-1">
-                              Credit limit *
-                            </label>
-                            <div className="relative">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-xs font-mono">
-                                $
-                              </span>
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                placeholder="e.g. 6000"
-                                value={formCreditLimit}
-                                onChange={(e) => setFormCreditLimit(e.target.value)}
-                                className="block w-full pl-7 pr-3 py-2 text-xs bg-zinc-900 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500 text-zinc-100 font-mono"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="p-3 bg-zinc-950/60 border border-white/5 rounded-xl space-y-2">
-                        <label className="flex items-center gap-2.5 cursor-pointer text-xs text-zinc-200 font-medium">
-                          <input
-                            type="checkbox"
-                            checked={formHasBalanceTransferFee}
-                            onChange={(e) => {
-                              setFormHasBalanceTransferFee(e.target.checked);
-                              if (!e.target.checked) {
-                                setFormBalanceTransferFee("");
-                                setFormBalanceTransferFeeMin("");
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-white/20 bg-zinc-900 text-amber-500 focus:ring-amber-500/20 cursor-pointer"
-                          />
-                          <span>Has transfer fee</span>
-                        </label>
-                        {formHasBalanceTransferFee && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 pl-6">
-                            <div>
-                              <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                Transfer fee *
-                              </label>
-                              <div className="relative">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="any"
-                                  placeholder="e.g. 3"
-                                  value={formBalanceTransferFee}
-                                  onChange={(e) => setFormBalanceTransferFee(e.target.value)}
-                                  className="block w-full pr-7 pl-3 py-2 text-xs bg-zinc-900 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500 text-zinc-100 font-mono"
-                                />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 text-xs font-mono">
-                                  %
-                                </span>
-                              </div>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                Minimum transfer fee *
-                              </label>
-                              <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-xs font-mono">
-                                  $
-                                </span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="any"
-                                  placeholder="e.g. 10"
-                                  value={formBalanceTransferFeeMin}
-                                  onChange={(e) => setFormBalanceTransferFeeMin(e.target.value)}
-                                  className="block w-full pl-7 pr-3 py-2 text-xs bg-zinc-900 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500 text-zinc-100 font-mono"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="p-3 bg-zinc-950/60 border border-white/5 rounded-xl space-y-2">
-                        <label className="flex items-center gap-2.5 cursor-pointer text-xs text-zinc-200 font-medium">
-                          <input
-                            type="checkbox"
-                            checked={formHasPromoPeriod}
-                            onChange={(e) => {
-                              setFormHasPromoPeriod(e.target.checked);
-                              if (!e.target.checked) {
-                                setFormPromoRate("");
-                                setFormPromoEndDate("");
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-white/20 bg-zinc-900 text-amber-500 focus:ring-amber-500/20 cursor-pointer"
-                          />
-                          <span>Promo period</span>
-                        </label>
-                        {formHasPromoPeriod && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 pl-6">
-                            <div>
-                              <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                Promo Annual Percentage Rate *
-                              </label>
-                              <div className="relative">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="any"
-                                  placeholder="e.g. 0"
-                                  value={formPromoRate}
-                                  onChange={(e) => setFormPromoRate(e.target.value)}
-                                  className="block w-full pr-7 pl-3 py-2 text-xs bg-zinc-900 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500 text-zinc-100 font-mono"
-                                />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 text-xs font-mono">
-                                  %
-                                </span>
-                              </div>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                Promo end date *
-                              </label>
-                              <input
-                                type="date"
-                                value={formPromoEndDate}
-                                onChange={(e) => setFormPromoEndDate(e.target.value)}
-                                className="block w-full px-3 py-2 text-xs bg-zinc-900 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500 text-zinc-100 font-mono"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-4 border-t border-white/5 mt-4">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setWizardError(null);
-                          setWizardStep(1);
-                        }}
-                        className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <ArrowLeft className="w-3.5 h-3.5" />
-                        <span>Back</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const bal = parseFloat(formCurrentBalance);
-                          if (isNaN(bal) || bal < 0) {
-                            setWizardError("Please enter a valid Current balance.");
-                            return;
-                          }
-                          const apr = parseFloat(formInterestRate);
-                          if (isNaN(apr) || apr < 0) {
-                            setWizardError("Please enter a valid Annual Percentage Rate.");
-                            return;
-                          }
-                          setWizardError(null);
-                          setWizardStep(3);
-                        }}
-                        className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition-colors shadow-lg shadow-amber-950/50 flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <span>Next</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 3: Payment Details */}
-                {wizardStep === 3 && (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-medium text-zinc-300 mb-1.5">
-                        How is the minimum payment calculated?
-                      </label>
-                      <select
-                        value={formMinPaymentCalc}
-                        onChange={(e) => setFormMinPaymentCalc(e.target.value)}
-                        className="block w-full px-3.5 py-2.5 text-xs bg-zinc-950 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 transition-colors cursor-pointer font-medium"
-                      >
-                        <option value="fixed">Fixed amount</option>
-                        <option value="percent_principal">% of balance</option>
-                        <option value="percent_principal_interest">% of balance + interest</option>
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-zinc-300 mb-1.5">
-                          Minimum payment *
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 text-xs font-mono font-bold">
-                            $
-                          </span>
-                          <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            required
-                            placeholder="e.g. 195"
-                            value={formMinimumPayment}
-                            onChange={(e) => {
-                              setFormMinimumPayment(e.target.value);
-                              if (!formAmount || formAmount === formMinimumPayment) {
-                                setFormAmount(e.target.value);
-                              }
-                            }}
-                            className="block w-full pl-8 pr-3.5 py-2.5 text-xs bg-zinc-950 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 font-mono transition-colors font-medium"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-amber-400 font-bold mb-1.5">
-                          Scheduled payment amount ($) *
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-400 text-xs font-mono font-bold">
-                            $
-                          </span>
-                          <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            required
-                            placeholder="e.g. 195"
-                            value={formAmount}
-                            onChange={(e) => setFormAmount(e.target.value)}
-                            className="block w-full pl-8 pr-3.5 py-2.5 text-xs bg-zinc-950 border border-amber-500/40 rounded-xl focus:outline-none focus:border-amber-400 text-zinc-100 font-mono transition-colors font-bold"
-                          />
-                        </div>
                       </div>
                     </div>
 
@@ -1454,47 +1103,22 @@ export const TransactionFormModal: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-zinc-300 mb-1.5">
-                          Next payment due date *
-                        </label>
-                        <input
-                          type="date"
-                          required
-                          value={formStartDate}
-                          onChange={(e) => setFormStartDate(e.target.value)}
-                          className="block w-full px-3.5 py-2.5 text-xs bg-zinc-950 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 font-mono transition-colors font-medium"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-zinc-300 mb-1.5">
-                          Paid From Account
-                        </label>
-                        <select
-                          value={formFundingAccountId}
-                          required
-                          onChange={(e) => setFormFundingAccountId(e.target.value)}
-                          className="block w-full px-3.5 py-2.5 text-xs bg-zinc-950 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 transition-colors cursor-pointer font-medium"
-                        >
-                          <option value="">Select an account...</option>
-                          {accounts
-                            .map((acc) => (
-                              <option key={acc.id} value={acc.id}>
-                                {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                    </div>
+                    <label className="flex items-center gap-2.5 cursor-pointer text-xs text-zinc-200 font-medium p-3 bg-zinc-950/60 border border-white/5 rounded-xl">
+                      <input
+                        type="checkbox"
+                        checked={formMovableDueDate}
+                        onChange={(e) => setFormMovableDueDate(e.target.checked)}
+                        className="w-4 h-4 rounded border-white/20 bg-zinc-900 text-amber-500 focus:ring-amber-500/20 cursor-pointer"
+                      />
+                      <span>This due date can be moved a few days if needed</span>
+                    </label>
 
                     <div className="flex justify-between items-center pt-4 border-t border-white/5 mt-4">
                       <button
                         type="button"
                         onClick={() => {
                           setWizardError(null);
-                          setWizardStep(2);
+                          setWizardStep(1);
                         }}
                         className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
                       >
@@ -1504,139 +1128,151 @@ export const TransactionFormModal: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          const minPmt = parseFloat(formMinimumPayment);
-                          if (isNaN(minPmt) || minPmt < 0) {
-                            setWizardError("Please enter a valid Minimum payment amount.");
-                            return;
-                          }
-                          const pmt = parseFloat(formAmount);
-                          if (isNaN(pmt) || pmt <= 0) {
-                            setWizardError("Please enter a valid Scheduled payment amount.");
-                            return;
-                          }
-                          if (!formStartDate) {
-                            setWizardError("Please choose a valid Next payment due date.");
-                            return;
-                          }
-                          if (!formFundingAccountId) {
-                            setWizardError("Please select an account to pay from.");
+                          const amt = parseFloat(formAmount);
+                          if (isNaN(amt) || amt <= 0) {
+                            setWizardError("Please enter a valid amount greater than $0.");
                             return;
                           }
                           setWizardError(null);
-                          setWizardStep(4);
+                          setWizardStep(3);
                         }}
                         className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition-colors shadow-lg shadow-amber-950/50 flex items-center gap-1.5 cursor-pointer"
                       >
-                        <span>Next: Review</span>
+                        <span>Next: Due Date & Review</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
                 )}
 
-                {/* Step 4: Review & Payoff */}
-                {wizardStep === 4 && (
+                {/* Step 3: Due Date & Review */}
+                {wizardStep === 3 && (
                   <form onSubmit={handleSave} className="space-y-4">
-                    {(() => {
-                      const bal = parseFloat(formCurrentBalance) || 0;
-                      const apr = parseFloat(formInterestRate) || 0;
-                      const pmt = parseFloat(formAmount) || 0;
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                        Next payment due date *
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        disabled={isSaving}
+                        value={formStartDate}
+                        onChange={(e) => setFormStartDate(e.target.value)}
+                        className="block w-full px-3.5 py-2.5 text-xs bg-zinc-950 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 font-mono transition-colors font-medium"
+                      />
+                    </div>
 
-                      return (
-                        <div className="space-y-4">
-                          {/* Liability Summary Box */}
-                          <div className="p-4 bg-zinc-900/90 border border-white/10 rounded-2xl space-y-3 text-xs">
-                            <div className="font-bold text-zinc-100 text-sm border-b border-white/5 pb-2 flex justify-between items-center">
-                              <span>{formTitle || "Liability Summary"}</span>
-                              <span className="text-[10px] font-mono font-normal uppercase px-2 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-md">
-                                {formLiabilityType === "card"
-                                  ? "Card"
-                                  : formLiabilityType === "loan"
-                                  ? "Loan"
-                                  : formLiabilityType === "line_of_credit"
-                                  ? "Line of Credit"
-                                  : formLiabilityType === "one_time"
-                                  ? "One Time"
-                                  : formLiabilityType}
-                              </span>
-                            </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                        Paid From Account
+                      </label>
+                      <select
+                        value={formFundingAccountId}
+                        required
+                        disabled={isSaving}
+                        onChange={(e) => setFormFundingAccountId(e.target.value)}
+                        className="block w-full px-3.5 py-2.5 text-xs bg-zinc-950 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-zinc-100 transition-colors cursor-pointer font-medium"
+                      >
+                        <option value="">Select an account...</option>
+                        {accounts.map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.name} ({acc.type === "other" ? acc.customType || "Other" : acc.type})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                            <div className="grid grid-cols-2 gap-3 text-zinc-300">
-                              <div>
-                                <span className="text-zinc-500 block text-[10px] uppercase font-mono">
-                                  Current Balance
-                                </span>
-                                <span className="font-mono font-bold text-white text-sm">
-                                  ${bal.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-zinc-500 block text-[10px] uppercase font-mono">
-                                  Interest Rate
-                                </span>
-                                <span className="font-mono font-bold text-amber-400 text-sm">
-                                  {apr}% APR
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-zinc-500 block text-[10px] uppercase font-mono">
-                                  Scheduled Payment
-                                </span>
-                                <span className="font-mono font-bold text-amber-300 text-sm">
-                                  ${pmt.toFixed(2)} ({formFrequency})
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-zinc-500 block text-[10px] uppercase font-mono">
-                                  Next Due Date
-                                </span>
-                                <span className="font-mono font-bold text-zinc-200 text-sm">
-                                  {formStartDate || "Not set"}
-                                </span>
-                              </div>
-                            </div>
-
-                            {formFundingAccountId && (
-                              <div className="pt-2 border-t border-white/5 flex justify-between text-zinc-400 text-xs">
-                                <span>Payment Source:</span>
-                                <span className="text-zinc-200 font-medium">
-                                  {accounts.find((a) => a.id === formFundingAccountId)?.name}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex justify-between items-center pt-4 border-t border-white/5 mt-4">
-                            <button
-                              type="button"
-                              disabled={isSaving}
-                              onClick={() => {
-                                setWizardError(null);
-                                setWizardStep(3);
-                              }}
-                              className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                            >
-                              <ArrowLeft className="w-3.5 h-3.5" />
-                              <span>Back</span>
-                            </button>
-                            <button
-                              type="submit"
-                              disabled={isSaving}
-                              className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-colors shadow-lg shadow-amber-950/50 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                            >
-                              <Clock className="w-3.5 h-3.5" />
-                              <span>
-                                {isSaving
-                                  ? "Saving..."
-                                  : editingId
-                                  ? "Save Changes"
-                                  : "Complete & Save Liability"}
-                              </span>
-                            </button>
-                          </div>
+                    {/* Liability Summary Box */}
+                    <div className="p-3.5 bg-amber-950/20 border border-amber-500/20 rounded-2xl flex flex-col gap-1.5 text-xs">
+                      <div className="text-[10px] font-mono uppercase text-amber-400 font-bold tracking-wider">
+                        Liability Summary Review
+                      </div>
+                      <div className="flex justify-between text-zinc-300">
+                        <span>Liability:</span>
+                        <span className="font-semibold text-white">{formTitle}</span>
+                      </div>
+                      <div className="flex justify-between text-zinc-300">
+                        <span>Amount & Frequency:</span>
+                        <span className="font-semibold text-amber-400 font-mono">
+                          ${formAmount} ({formFrequency})
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-zinc-300">
+                        <span>Paid From:</span>
+                        <span className="font-semibold text-white">
+                          {accounts.find((a) => a.id === formFundingAccountId)?.name}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-zinc-300">
+                        <span>Next Due Date:</span>
+                        <span className="font-semibold text-white font-mono">{formStartDate}</span>
+                      </div>
+                      {formMovableDueDate && (
+                        <div className="flex justify-between text-zinc-300">
+                          <span>Movable due date:</span>
+                          <span className="font-semibold text-white">Yes</span>
                         </div>
-                      );
-                    })()}
+                      )}
+                    </div>
+
+                    {/* Mark Paid Off (edit only) */}
+                    {editingId && (
+                      <div className="p-3.5 bg-emerald-950/10 border border-emerald-500/15 rounded-2xl flex flex-col gap-2.5">
+                        <span className="text-[10px] font-mono uppercase text-emerald-400 font-bold tracking-wider">
+                          Close this liability
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="date"
+                            disabled={isSaving}
+                            value={formMarkPaidOffDate}
+                            onChange={(e) => setFormMarkPaidOffDate(e.target.value)}
+                            className="flex-1 px-3 py-2 text-xs bg-zinc-950 border border-white/10 rounded-lg focus:outline-none focus:border-emerald-500 text-zinc-100 font-mono transition-colors"
+                          />
+                          <button
+                            type="button"
+                            disabled={isSaving || !formMarkPaidOffDate}
+                            onClick={async () => {
+                              const ok = await markLiabilityPaidOff(editingId, formMarkPaidOffDate);
+                              if (ok) resetForm();
+                            }}
+                            className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Mark paid off</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center pt-4 border-t border-white/5 mt-4">
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => {
+                          setWizardError(null);
+                          setWizardStep(2);
+                        }}
+                        className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Back</span>
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSaving}
+                        className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition-colors shadow-lg shadow-amber-950/50 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>
+                          {isSaving
+                            ? "Saving..."
+                            : editingId
+                            ? "Save Changes"
+                            : "Complete & Save Liability"}
+                        </span>
+                      </button>
+                    </div>
                   </form>
                 )}
               </div>
