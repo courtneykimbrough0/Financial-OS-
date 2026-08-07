@@ -12,21 +12,8 @@ export function validateTransactionInput(
     accountId?: string;
     fundingAccountId?: string;
     targetAccountId?: string;
-    liabilityType?: string;
-    interestRate?: string;
-    currentBalance?: string;
-    startingBalance?: string;
-    creditLimit?: string;
-    minimumPayment?: string;
-    balanceTransferFee?: string;
-    balanceTransferFeeMin?: string;
-    promoRate?: string;
-    promoEndDate?: string;
-    minimumPaymentCalc?: string;
     dayOfMonth?: string;
-    hasCreditLimit?: boolean;
-    hasBalanceTransferFee?: boolean;
-    hasPromoPeriod?: boolean;
+    movableDueDate?: boolean;
   }
 ): { success: true; data: Omit<RecurringTransaction, "id"> & { id?: string } } | { success: false; error: string } {
   if (!input.title.trim()) {
@@ -102,27 +89,8 @@ export function validateTransactionInput(
   };
 
   if (input.category === "liability") {
-    tx.liabilityType = (input.liabilityType || "card") as any;
-    tx.interestRate = input.interestRate ? parseFloat(input.interestRate) : undefined;
-    tx.currentBalance = input.currentBalance ? parseFloat(input.currentBalance) : undefined;
-    tx.startingBalance = input.startingBalance ? parseFloat(input.startingBalance) : undefined;
-    tx.creditLimit =
-      input.hasCreditLimit && input.creditLimit ? parseFloat(input.creditLimit) : undefined;
-    tx.minimumPayment = input.minimumPayment ? parseFloat(input.minimumPayment) : undefined;
-    tx.balanceTransferFee =
-      input.hasBalanceTransferFee && input.balanceTransferFee
-        ? parseFloat(input.balanceTransferFee)
-        : undefined;
-    tx.balanceTransferFeeMin =
-      input.hasBalanceTransferFee && input.balanceTransferFeeMin
-        ? parseFloat(input.balanceTransferFeeMin)
-        : undefined;
-    tx.promoRate =
-      input.hasPromoPeriod && input.promoRate ? parseFloat(input.promoRate) : undefined;
-    tx.promoEndDate =
-      input.hasPromoPeriod && input.promoEndDate ? input.promoEndDate : undefined;
-    tx.minimumPaymentCalc = (input.minimumPaymentCalc || "fixed") as any;
     tx.dayOfMonth = input.dayOfMonth || undefined;
+    tx.movableDueDate = input.movableDueDate;
   }
 
   return { success: true, data: tx };

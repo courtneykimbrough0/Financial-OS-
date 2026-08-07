@@ -60,7 +60,11 @@ create table if not exists public.transactions (
   funding_account_id uuid references public.accounts (id) on delete set null,
   target_account_id uuid references public.accounts (id) on delete set null,
 
-  -- liability-only fields
+  -- Legacy liability-payoff fields — the app no longer reads or writes any of
+  -- these (see issue #60: liabilities are now plain recurring payments with
+  -- no balance/interest/APR/credit-limit tracking). Kept here, unused, until
+  -- a follow-up migration drops them; see the "legacy liability column drop"
+  -- ALTER TABLE block below for the DB-engineer handoff.
   liability_type text check (
     liability_type in ('card', 'loan', 'line_of_credit', 'one_time')
   ),
@@ -76,7 +80,11 @@ create table if not exists public.transactions (
   minimum_payment_calc text check (
     minimum_payment_calc in ('fixed', 'percent_principal', 'percent_principal_interest')
   ),
+
   day_of_month text,
+  -- Liability-only: whether this due date can be nudged a few days.
+  -- Consumed by a later guidance-shell issue.
+  movable_due_date boolean,
 
   created_at timestamptz not null default now()
 );
@@ -194,3 +202,30 @@ begin
     revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Migration handoff (issue #60) — for the DB-engineer to run against the
+-- live project. `create table if not exists` above only affects fresh
+-- installs; an existing `public.transactions` table needs these applied
+-- directly.
+-- ---------------------------------------------------------------------------
+
+-- 1. Apply now — new column the app writes to as of this issue:
+alter table public.transactions add column if not exists movable_due_date boolean;
+
+-- 2. FOLLOW-UP ONLY — do not run yet. The app no longer reads or writes any
+--    of these columns (superseded by the plain-payment liability model), but
+--    they're left in place for one release cycle in case a rollback is
+--    needed. Drop once #60 has been live without incident:
+--
+-- alter table public.transactions drop column if exists liability_type;
+-- alter table public.transactions drop column if exists interest_rate;
+-- alter table public.transactions drop column if exists current_balance;
+-- alter table public.transactions drop column if exists starting_balance;
+-- alter table public.transactions drop column if exists credit_limit;
+-- alter table public.transactions drop column if exists minimum_payment;
+-- alter table public.transactions drop column if exists balance_transfer_fee;
+-- alter table public.transactions drop column if exists balance_transfer_fee_min;
+-- alter table public.transactions drop column if exists promo_rate;
+-- alter table public.transactions drop column if exists promo_end_date;
+-- alter table public.transactions drop column if exists minimum_payment_calc;

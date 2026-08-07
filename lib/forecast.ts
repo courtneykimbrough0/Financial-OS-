@@ -35,18 +35,8 @@ export interface RecurringTransaction {
   accountId?: string; // Primary account connected (for income, fixed-expense, subscription)
   fundingAccountId?: string; // Funding source (checking/savings) for liability/savings payments
   targetAccountId?: string; // Destination account (e.g., savings account)
-  liabilityType?: 'card' | 'loan' | 'line_of_credit' | 'one_time';
-  interestRate?: number; // Annual Percentage Rate (APR %) e.g. 21.99
-  currentBalance?: number; // Current outstanding balance owed
-  startingBalance?: number; // Original / starting balance
-  creditLimit?: number; // Total credit limit (for credit cards / lines of credit)
-  minimumPayment?: number; // Minimum required monthly payment
-  balanceTransferFee?: number; // Fee % for balance transfer
-  balanceTransferFeeMin?: number; // Minimum $ fee for balance transfer
-  promoRate?: number; // Promotional APR %
-  promoEndDate?: string; // Promotional APR end date (YYYY-MM-DD)
-  minimumPaymentCalc?: 'fixed' | 'percent_principal' | 'percent_principal_interest';
   dayOfMonth?: string; // Due day of month (e.g. "1".."31" or "Last")
+  movableDueDate?: boolean; // Liability-only: whether this due date can be nudged (consumed by a later guidance issue)
   endDate?: string; // Ending date (YYYY-MM-DD) when the recurring transaction stops occurring
 }
 
@@ -641,12 +631,8 @@ export const SAMPLE_TRANSACTIONS: RecurringTransaction[] = [
     frequency: "monthly",
     category: "liability",
     fundingAccountId: "acc_checking",
-    liabilityType: "card",
-    currentBalance: 4200,
-    startingBalance: 6000,
-    creditLimit: 10000,
-    interestRate: 22.99,
-    minimumPayment: 85,
+    dayOfMonth: "20",
+    movableDueDate: false,
     notes: "High interest rewards credit card balance.",
   },
   {
@@ -657,11 +643,8 @@ export const SAMPLE_TRANSACTIONS: RecurringTransaction[] = [
     frequency: "monthly",
     category: "liability",
     fundingAccountId: "acc_checking",
-    liabilityType: "loan",
-    currentBalance: 8500,
-    startingBalance: 18000,
-    interestRate: 5.49,
-    minimumPayment: 380,
+    dayOfMonth: "12",
+    movableDueDate: false,
     notes: "Fixed rate 5-year vehicle financing.",
   }
 ];
