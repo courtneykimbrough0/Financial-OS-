@@ -8,16 +8,12 @@ import {
   Target,
   Clock,
   X,
-  CheckCircle2,
-  Calendar as CalendarIcon,
-  AlertTriangle,
   Scissors,
   Plus,
   Trash2,
 } from "lucide-react";
 import { useFinancialData } from "./FinancialOSContext";
 import {
-  calculatePayoffDetails,
   getFrequencySubtext,
   RecurringTransaction,
   formatDateLocal,
@@ -60,12 +56,6 @@ export const TransactionDetailModal: React.FC = () => {
   // Find linked account
   const linkedAccId = tx.accountId || tx.fundingAccountId || tx.targetAccountId;
   const linkedAcc = accounts.find((a) => a.id === linkedAccId);
-
-  const payoff = isLia ? calculatePayoffDetails(tx) : null;
-  const bal = tx.currentBalance !== undefined ? tx.currentBalance : 0;
-  const limit = tx.creditLimit || 0;
-  const utilization = limit > 0 ? Math.round((bal / limit) * 100) : 0;
-  const isPaidOff = isLia && bal === 0;
 
   const handleEditClick = () => {
     setEditingId(tx.id);
@@ -220,115 +210,6 @@ export const TransactionDetailModal: React.FC = () => {
                 </span>
               </div>
             </div>
-
-            {/* Liability-Specific Advanced Details */}
-            {isLia && payoff && (
-              <div className="space-y-4 border-t border-white/5 pt-4">
-                <span className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
-                  Liability Payoff Analysis
-                </span>
-
-                {/* Payoff Status Alert banner */}
-                {isPaidOff ? (
-                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center text-xs font-bold text-emerald-400 flex items-center justify-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>This liability is fully paid off!</span>
-                  </div>
-                ) : payoff.monthsToPayoff !== null ? (
-                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-center text-xs font-bold text-amber-300 flex items-center justify-center gap-1.5">
-                    <CalendarIcon className="w-4 h-4" />
-                    <span>Projected Payoff: {payoff.payoffDateStr}</span>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-xl text-center text-xs font-bold text-orange-400 flex items-center justify-center gap-1.5 animate-pulse">
-                    <AlertTriangle className="w-4 h-4" />
-                    <span>Your payments don&apos;t cover the interest — the balance is going up.</span>
-                  </div>
-                )}
-
-                {/* Credit card utilization details */}
-                {limit > 0 && (
-                  <div className="space-y-1.5 p-3.5 bg-zinc-900/30 border border-white/5 rounded-xl">
-                    <div className="flex justify-between text-[10px] font-mono">
-                      <span className="text-zinc-400">% of Limit Used</span>
-                      <span
-                        className={`font-bold ${
-                          utilization > 70
-                            ? "text-orange-400"
-                            : utilization > 30
-                            ? "text-amber-400"
-                            : "text-emerald-400"
-                        }`}
-                      >
-                        {utilization}% (${bal.toLocaleString("en-US")} / ${limit.toLocaleString(
-                          "en-US"
-                        )})
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/5">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          utilization > 70
-                            ? "bg-orange-500"
-                            : utilization > 30
-                            ? "bg-amber-500"
-                            : "bg-emerald-500"
-                        }`}
-                        style={{ width: `${Math.min(utilization, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Financial values box */}
-                <div className="grid grid-cols-2 gap-3 p-3 bg-zinc-900/30 border border-white/5 rounded-xl">
-                  <div>
-                    <span className="text-[9px] font-mono text-zinc-500 block">Current Owed</span>
-                    <span className="text-sm font-bold font-mono text-white">
-                      ${bal.toLocaleString("en-US")}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[9px] font-mono text-zinc-500 block">Minimum Due</span>
-                    <span className="text-sm font-bold font-mono text-zinc-300">
-                      ${tx.minimumPayment ? tx.minimumPayment.toLocaleString("en-US") : "$0.00"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Interest accretion details */}
-                {tx.interestRate !== undefined && tx.interestRate > 0 && !isPaidOff && (
-                  <div className="text-xs space-y-2 bg-amber-950/10 p-3.5 rounded-2xl border border-amber-500/15">
-                    <div className="flex justify-between text-zinc-300">
-                      <span>Interest Rate:</span>
-                      <span className="font-mono font-bold text-amber-400">
-                        {tx.interestRate}%
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-zinc-300">
-                      <span>Interest per day:</span>
-                      <span className="font-mono text-zinc-200">
-                        ${payoff.dailyInterestAccrual.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-zinc-300">
-                      <span>Interest per month:</span>
-                      <span className="font-mono text-zinc-200">
-                        ${payoff.monthlyInterestAccrual.toFixed(2)}
-                      </span>
-                    </div>
-                    {payoff.monthsToPayoff !== null && (
-                      <div className="flex justify-between text-zinc-300 pt-1.5 border-t border-amber-500/10">
-                        <span>Total Est. Interest Cost:</span>
-                        <span className="font-mono font-bold text-amber-300">
-                          ${payoff.totalInterestPaid.toLocaleString("en-US")}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Notes Section */}
             {tx.notes && (

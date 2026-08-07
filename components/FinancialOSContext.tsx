@@ -78,9 +78,6 @@ interface FinancialOSContextType {
   editingId: string | null;
   wizardStep: number;
   wizardError: string | null;
-  isPayoffPlannerOpen: boolean;
-  payoffStrategy: "avalanche" | "snowball";
-  payoffExtraBudget: number;
   editingAccountId: string | null;
   isAddingAccount: boolean;
   deletingAccount: Account | null;
@@ -113,9 +110,6 @@ interface FinancialOSContextType {
   setEditingId: React.Dispatch<React.SetStateAction<string | null>>;
   setWizardStep: React.Dispatch<React.SetStateAction<number>>;
   setWizardError: React.Dispatch<React.SetStateAction<string | null>>;
-  setIsPayoffPlannerOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  setPayoffStrategy: React.Dispatch<React.SetStateAction<"avalanche" | "snowball">>;
-  setPayoffExtraBudget: React.Dispatch<React.SetStateAction<number>>;
   setEditingAccountId: React.Dispatch<React.SetStateAction<string | null>>;
   setIsAddingAccount: React.Dispatch<React.SetStateAction<boolean>>;
   setDeletingAccount: React.Dispatch<React.SetStateAction<Account | null>>;
@@ -217,9 +211,6 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [editingId, setEditingId] = useState<string | null>(null);
   const [wizardStep, setWizardStep] = useState<number>(1);
   const [wizardError, setWizardError] = useState<string | null>(null);
-  const [isPayoffPlannerOpen, setIsPayoffPlannerOpen] = useState<boolean>(false);
-  const [payoffStrategy, setPayoffStrategy] = useState<"avalanche" | "snowball">("avalanche");
-  const [payoffExtraBudget, setPayoffExtraBudget] = useState<number>(200);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [isAddingAccount, setIsAddingAccount] = useState<boolean>(false);
   const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
@@ -1034,9 +1025,6 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
         editingId,
         wizardStep,
         wizardError,
-        isPayoffPlannerOpen,
-        payoffStrategy,
-        payoffExtraBudget,
         editingAccountId,
         isAddingAccount,
         deletingAccount,
@@ -1065,9 +1053,6 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setEditingId,
         setWizardStep,
         setWizardError,
-        setIsPayoffPlannerOpen,
-        setPayoffStrategy,
-        setPayoffExtraBudget,
         setEditingAccountId,
         setIsAddingAccount,
         setDeletingAccount,

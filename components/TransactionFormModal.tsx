@@ -11,13 +11,11 @@ import {
   Clock,
   Zap,
   Calendar as CalendarIcon,
-  AlertTriangle,
   Flame,
   Snowflake,
   Target,
 } from "lucide-react";
 import { useFinancialData } from "./FinancialOSContext";
-import { calculatePayoffDetails } from "@/lib/forecast";
 
 export const TransactionFormModal: React.FC = () => {
   const {
@@ -1543,21 +1541,6 @@ export const TransactionFormModal: React.FC = () => {
                       const bal = parseFloat(formCurrentBalance) || 0;
                       const apr = parseFloat(formInterestRate) || 0;
                       const pmt = parseFloat(formAmount) || 0;
-                      const minPmt = parseFloat(formMinimumPayment) || 0;
-                      const details =
-                        bal > 0
-                          ? calculatePayoffDetails({
-                              id: "temp",
-                              title: formTitle,
-                              amount: pmt,
-                              startDate: formStartDate,
-                              frequency: formFrequency as any,
-                              category: "liability",
-                              currentBalance: bal,
-                              interestRate: apr,
-                              minimumPayment: minPmt,
-                            })
-                          : null;
 
                       return (
                         <div className="space-y-4">
@@ -1619,71 +1602,6 @@ export const TransactionFormModal: React.FC = () => {
                                 <span className="text-zinc-200 font-medium">
                                   {accounts.find((a) => a.id === formFundingAccountId)?.name}
                                 </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Payoff & Interest Analysis */}
-                          <div className="p-4 bg-amber-950/20 border border-amber-500/25 rounded-2xl flex flex-col gap-2.5 text-xs">
-                            <div className="flex items-center justify-between text-[10px] font-mono uppercase text-amber-400 font-bold tracking-wider">
-                              <span>Payoff Projection & Interest Terms</span>
-                              {details && details.monthsToPayoff !== null && (
-                                <span className="bg-amber-500/20 px-2.5 py-0.5 rounded-lg text-amber-300 font-semibold border border-amber-500/30">
-                                  {details.monthsToPayoff} Months
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2 py-1">
-                              <div className="bg-black/40 p-2.5 rounded-xl border border-white/5">
-                                <div className="text-[10px] text-zinc-400 font-mono">Daily Interest</div>
-                                <div className="text-sm font-bold text-amber-300 font-mono">
-                                  ${details ? details.dailyInterestAccrual.toFixed(2) : "0.00"} /
-                                  day
-                                </div>
-                              </div>
-                              <div className="bg-black/40 p-2.5 rounded-xl border border-white/5">
-                                <div className="text-[10px] text-zinc-400 font-mono">
-                                  Monthly Interest
-                                </div>
-                                <div className="text-sm font-bold text-amber-300 font-mono">
-                                  ${details ? details.monthlyInterestAccrual.toFixed(2) : "0.00"}{" "}
-                                  / mo
-                                </div>
-                              </div>
-                            </div>
-
-                            {details && (
-                              <div className="space-y-1.5 pt-2 border-t border-amber-500/15 text-zinc-300">
-                                {details.monthsToPayoff !== null ? (
-                                  <>
-                                    <div className="flex justify-between">
-                                      <span>Projected Payoff Date:</span>
-                                      <span className="font-mono font-bold text-emerald-400">
-                                        {details.payoffDateStr}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Total Est. Interest Cost:</span>
-                                      <span className="font-mono font-bold text-zinc-200">
-                                        $
-                                        {details.totalInterestPaid.toLocaleString("en-US", {
-                                          minimumFractionDigits: 2,
-                                          maximumFractionDigits: 2,
-                                        })}
-                                      </span>
-                                    </div>
-                                  </>
-                                ) : (
-                                  <div className="p-2.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 text-[11px] flex items-center gap-2">
-                                    <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0" />
-                                    <span>
-                                      Scheduled payment (${pmt.toFixed(2)}) is less than or equal to
-                                      monthly interest (${details.monthlyInterestAccrual.toFixed(2)}
-                                      ). The liability will not pay down!
-                                    </span>
-                                  </div>
-                                )}
                               </div>
                             )}
                           </div>
