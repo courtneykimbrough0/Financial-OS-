@@ -1,9 +1,10 @@
 -- Financial OS — Supabase schema for the alpha
 --
 -- Run this once in the Supabase SQL Editor (Project → SQL Editor → New query → paste → Run)
--- on a fresh project. Mirrors the client-side types in lib/forecast.ts (Account,
--- RecurringTransaction, TransactionOverride) so the TypeScript data layer is a
--- straight mapping onto these tables.
+-- on a fresh project. Mirrors the client-side types in lib/forecast.ts
+-- (RecurringTransaction, TransactionOverride) so the TypeScript data layer is
+-- a straight mapping onto these tables. The `accounts` table below is legacy
+-- (see the "accounts — LEGACY" note on its definition).
 --
 -- Every table is scoped to auth.uid() via Row Level Security — a signed-in user can
 -- only ever see or modify their own rows. There is no server-side bypass in this app;
@@ -11,7 +12,12 @@
 -- are what actually enforce access, not the key itself.
 
 -- ---------------------------------------------------------------------------
--- accounts
+-- accounts — LEGACY (issue #61: collapsed to a single spendable pool). The
+-- app no longer reads or writes this table at all; `user_settings.current_balance`
+-- is the one pool's balance now. Kept in place, unused, for a follow-up drop
+-- migration (see the "legacy accounts drop" ALTER/DROP block at the bottom
+-- of this file for the DB-engineer handoff) rather than an irreversible drop
+-- bundled with this deploy.
 -- ---------------------------------------------------------------------------
 create table if not exists public.accounts (
   id uuid primary key default gen_random_uuid(),
@@ -51,11 +57,15 @@ create table if not exists public.transactions (
     frequency in ('daily', 'weekly', 'biweekly', 'semimonthly', 'monthly', 'quarterly', 'yearly', 'onetime')
   ),
   category text not null check (
-    category in ('income', 'fixed-expense', 'subscription', 'liability', 'savings', 'transfer')
+    category in ('income', 'fixed-expense', 'subscription', 'liability', 'savings')
   ),
   semi_monthly_days integer[],
   notes text,
 
+  -- Legacy account-linkage columns (issue #61: collapsed to a single
+  -- spendable pool — no more per-account routing). The app no longer reads
+  -- or writes these. Kept here, unused, until a follow-up migration drops
+  -- them alongside the `accounts` table itself.
   account_id uuid references public.accounts (id) on delete set null,
   funding_account_id uuid references public.accounts (id) on delete set null,
   target_account_id uuid references public.accounts (id) on delete set null,
@@ -229,3 +239,27 @@ alter table public.transactions add column if not exists movable_due_date boolea
 -- alter table public.transactions drop column if exists promo_rate;
 -- alter table public.transactions drop column if exists promo_end_date;
 -- alter table public.transactions drop column if exists minimum_payment_calc;
+
+-- ---------------------------------------------------------------------------
+-- Migration handoff (issue #61) — collapse to a single spendable pool.
+-- `create table if not exists` above only affects fresh installs; an
+-- existing live project needs these applied directly.
+-- ---------------------------------------------------------------------------
+
+-- 1. Apply now — the transactions.category check constraint on a live
+--    project still allows 'transfer'; tighten it to match the app (only
+--    needed if the live constraint predates this issue — safe to re-run):
+alter table public.transactions drop constraint if exists transactions_category_check;
+alter table public.transactions add constraint transactions_category_check
+  check (category in ('income', 'fixed-expense', 'subscription', 'liability', 'savings'));
+
+-- 2. FOLLOW-UP ONLY — do not run yet. The app no longer reads or writes the
+--    accounts table or these linkage columns at all (superseded by the
+--    single-pool model driven by user_settings.current_balance). Left in
+--    place for one release cycle in case a rollback is needed. Drop once
+--    #61 has been live without incident:
+--
+-- alter table public.transactions drop column if exists account_id;
+-- alter table public.transactions drop column if exists funding_account_id;
+-- alter table public.transactions drop column if exists target_account_id;
+-- drop table if exists public.accounts;

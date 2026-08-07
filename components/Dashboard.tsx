@@ -10,8 +10,8 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useFinancialData } from "./FinancialOSContext";
-import { parseDateLocal, generateForecast, formatDateLocal, ForecastDay } from "@/lib/forecast";
-import { AccountHealthView } from "./AccountHealthView";
+import { generateForecast, formatDateLocal, ForecastDay } from "@/lib/forecast";
+import { FlowViewPlaceholder } from "./FlowViewPlaceholder";
 
 function getMondayOfWeek(d: Date): Date {
   const day = d.getDay();
@@ -24,15 +24,11 @@ function getMondayOfWeek(d: Date): Date {
 export const Dashboard: React.FC = () => {
   const {
     activeTab,
-    accounts,
     transactions,
     transactionOverrides,
-    launchDateStr,
     loading,
     dashboardViewMode,
     setDashboardViewMode,
-    dashboardAccountFilter,
-    setDashboardAccountFilter,
     forecastRange,
     setForecastRange,
     calendarYear,
@@ -42,11 +38,11 @@ export const Dashboard: React.FC = () => {
     selectedDay,
     setSelectedDay,
     lowBalanceAlerts,
-    initialBalance,
+    currentBalance,
     calendarForecastTimeline,
   } = useFinancialData();
 
-
+  const todayStr = formatDateLocal(new Date());
 
   // Local helper for month names in mini calendars
   const calendarMonthLabel = useMemo(() => {
@@ -70,8 +66,8 @@ export const Dashboard: React.FC = () => {
 
   // Dynamic forecast timelines depending on the user's view selection
   const forecastTimeline = useMemo(() => {
-    if (!launchDateStr || loading) return [];
-    let start = parseDateLocal(launchDateStr);
+    if (loading) return [];
+    let start = new Date();
     let days = 30;
     if (forecastRange === "week") {
       start = getMondayOfWeek(start);
@@ -90,11 +86,10 @@ export const Dashboard: React.FC = () => {
     return generateForecast({
       startDate: start,
       numberOfDays: days,
-      accounts,
       transactions,
       overrides: transactionOverrides,
     });
-  }, [launchDateStr, forecastRange, accounts, transactions, transactionOverrides, loading]);
+  }, [forecastRange, transactions, transactionOverrides, loading]);
 
   // Traditional Month Calendar Cell Grid
   const calendarCells = useMemo(() => {
@@ -132,32 +127,21 @@ export const Dashboard: React.FC = () => {
     let subscriptions = 0;
     let liabilities = 0;
     let savings = 0;
-    let endingBal = initialBalance;
+    let endingBal = currentBalance ?? 0;
 
     // Based on the selected timeframe view
     if (forecastRange === "week" || forecastRange === "two-weeks" || forecastRange === "quarter") {
       forecastTimeline.forEach((day, idx) => {
         day.transactions.forEach((tx) => {
           const amt = Math.abs(tx.amount);
-          const matchesFilter =
-            !dashboardAccountFilter ||
-            tx.item.accountId === dashboardAccountFilter ||
-            tx.item.fundingAccountId === dashboardAccountFilter ||
-            tx.item.targetAccountId === dashboardAccountFilter;
-
-          if (matchesFilter) {
-            if (tx.item.category === "income") income += amt;
-            else if (tx.item.category === "fixed-expense") fixedExpenses += amt;
-            else if (tx.item.category === "subscription") subscriptions += amt;
-            else if (tx.item.category === "liability") liabilities += amt;
-            else if (tx.item.category === "savings") savings += amt;
-          }
+          if (tx.item.category === "income") income += amt;
+          else if (tx.item.category === "fixed-expense") fixedExpenses += amt;
+          else if (tx.item.category === "subscription") subscriptions += amt;
+          else if (tx.item.category === "liability") liabilities += amt;
+          else if (tx.item.category === "savings") savings += amt;
         });
         if (idx === forecastTimeline.length - 1) {
-          endingBal =
-            dashboardAccountFilter && day.accountBalances
-              ? (day.accountBalances[dashboardAccountFilter] ?? 0)
-              : day.endingBalance;
+          endingBal = day.endingBalance;
         }
       });
     } else {
@@ -167,27 +151,16 @@ export const Dashboard: React.FC = () => {
         const day = cell.forecast!;
         day.transactions.forEach((tx) => {
           const amt = Math.abs(tx.amount);
-          const matchesFilter =
-            !dashboardAccountFilter ||
-            tx.item.accountId === dashboardAccountFilter ||
-            tx.item.fundingAccountId === dashboardAccountFilter ||
-            tx.item.targetAccountId === dashboardAccountFilter;
-
-          if (matchesFilter) {
-            if (tx.item.category === "income") income += amt;
-            else if (tx.item.category === "fixed-expense") fixedExpenses += amt;
-            else if (tx.item.category === "subscription") subscriptions += amt;
-            else if (tx.item.category === "liability") liabilities += amt;
-            else if (tx.item.category === "savings") savings += amt;
-          }
+          if (tx.item.category === "income") income += amt;
+          else if (tx.item.category === "fixed-expense") fixedExpenses += amt;
+          else if (tx.item.category === "subscription") subscriptions += amt;
+          else if (tx.item.category === "liability") liabilities += amt;
+          else if (tx.item.category === "savings") savings += amt;
         });
       });
       if (activeDays.length > 0) {
         const lastDay = activeDays[activeDays.length - 1].forecast!;
-        endingBal =
-          dashboardAccountFilter && lastDay.accountBalances
-            ? (lastDay.accountBalances[dashboardAccountFilter] ?? 0)
-            : lastDay.endingBalance;
+        endingBal = lastDay.endingBalance;
       }
     }
 
@@ -202,13 +175,7 @@ export const Dashboard: React.FC = () => {
       spending,
       endingBalance: endingBal,
     };
-  }, [
-    forecastRange,
-    forecastTimeline,
-    calendarCells,
-    initialBalance,
-    dashboardAccountFilter,
-  ]);
+  }, [forecastRange, forecastTimeline, calendarCells, currentBalance]);
 
   const handlePrevMonth = () => {
     if (calendarMonth === 0) {
@@ -253,10 +220,7 @@ export const Dashboard: React.FC = () => {
           {/* View Switcher Pills */}
           <div className="flex w-fit bg-black/60 p-1 rounded-xl border border-white/10 select-none">
             <button
-              onClick={() => {
-                setDashboardViewMode("calendar");
-                setDashboardAccountFilter("");
-              }}
+              onClick={() => setDashboardViewMode("calendar")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 dashboardViewMode === "calendar"
                   ? "bg-zinc-800 text-white shadow-md border border-white/10"
@@ -439,12 +403,7 @@ export const Dashboard: React.FC = () => {
                       <div className="flex items-center gap-2 text-xs font-mono font-bold bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-3 py-1.5 text-indigo-300">
                         <span>Projected:</span>
                         <span className="font-bold text-white">
-                          $
-                          {Math.round(
-                            dashboardAccountFilter && day.accountBalances
-                              ? day.accountBalances[dashboardAccountFilter] ?? 0
-                              : day.endingBalance
-                          ).toLocaleString()}
+                          ${Math.round(day.endingBalance).toLocaleString()}
                         </span>
                       </div>
                     </div>
@@ -464,17 +423,6 @@ export const Dashboard: React.FC = () => {
                             : isLiability
                             ? "text-amber-400 bg-amber-500/10 border-amber-500/20"
                             : "text-sky-400 bg-sky-500/10 border-sky-500/20";
-
-                          const accName =
-                            accounts.find(
-                              (a) =>
-                                a.id ===
-                                (isIncome ||
-                                t.item.category === "fixed-expense" ||
-                                t.item.category === "subscription"
-                                  ? t.item.accountId
-                                  : t.item.fundingAccountId)
-                            )?.name || "";
 
                           return (
                             <div
@@ -508,11 +456,6 @@ export const Dashboard: React.FC = () => {
                                     >
                                       {t.item.category.replace("-", " ")}
                                     </span>
-                                    {accName && (
-                                      <span className="text-[9px] text-zinc-500 font-mono">
-                                        ({accName})
-                                      </span>
-                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -569,12 +512,8 @@ export const Dashboard: React.FC = () => {
                   const dForecast = cell.forecast;
                   const dayNum = cell.date.getDate();
                   const isSelected = selectedDay && selectedDay.dateStr === dForecast?.dateStr;
-                  const isLaunchDay = dForecast?.dateStr === launchDateStr;
-                  const balance = dForecast
-                    ? dashboardAccountFilter && dForecast.accountBalances
-                      ? dForecast.accountBalances[dashboardAccountFilter] ?? 0
-                      : dForecast.endingBalance
-                    : 0;
+                  const isToday = dForecast?.dateStr === todayStr;
+                  const balance = dForecast ? dForecast.endingBalance : 0;
 
                   const hasIncome =
                     dForecast && dForecast.transactions.some((t) => t.item.category === "income");
@@ -596,7 +535,7 @@ export const Dashboard: React.FC = () => {
                       className={`min-h-[60px] sm:aspect-square p-1.5 sm:p-2 flex flex-col justify-between text-left rounded-2xl transition-all duration-200 border cursor-pointer ${
                         isSelected
                           ? "bg-indigo-600/20 border-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.3)] scale-[1.02]"
-                          : isLaunchDay
+                          : isToday
                           ? "bg-zinc-900 border-indigo-400/80"
                           : "bg-zinc-900/50 border-white/10 hover:border-zinc-700 hover:bg-zinc-900/80"
                       }`}
@@ -604,14 +543,14 @@ export const Dashboard: React.FC = () => {
                       <div className="flex items-center justify-between w-full">
                         <span
                           className={`text-[11px] sm:text-xs font-mono font-bold ${
-                            isLaunchDay ? "text-indigo-400" : "text-zinc-200"
+                            isToday ? "text-indigo-400" : "text-zinc-200"
                           }`}
                         >
                           {dayNum}
                         </span>
-                        {isLaunchDay && (
+                        {isToday && (
                           <span className="text-[8px] font-mono font-bold bg-indigo-500/20 text-indigo-300 px-1 rounded border border-indigo-500/30">
-                            START
+                            TODAY
                           </span>
                         )}
                         {dForecast && lowBalanceDatesMap.has(dForecast.dateStr) && (
@@ -720,11 +659,6 @@ export const Dashboard: React.FC = () => {
                         }
 
                         const isSelected = selectedDay && selectedDay.dateStr === cell.forecast?.dateStr;
-                        const balance = cell.forecast
-                          ? dashboardAccountFilter && cell.forecast.accountBalances
-                            ? cell.forecast.accountBalances[dashboardAccountFilter] ?? 0
-                            : cell.forecast.endingBalance
-                          : 0;
                         const dayNum = cell.date.getDate();
 
                         const hasIncome =
@@ -789,7 +723,7 @@ export const Dashboard: React.FC = () => {
           transition={{ duration: 0.2 }}
           className="flex flex-col gap-6"
         >
-          <AccountHealthView />
+          <FlowViewPlaceholder />
         </motion.div>
       )}
     </motion.div>

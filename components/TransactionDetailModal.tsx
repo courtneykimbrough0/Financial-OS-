@@ -25,7 +25,6 @@ export const TransactionDetailModal: React.FC = () => {
   const {
     selectedDetailTransaction,
     setSelectedDetailTransaction,
-    accounts,
     setEditingId,
     setFormCategory,
     setIsAddingTransaction,
@@ -52,10 +51,6 @@ export const TransactionDetailModal: React.FC = () => {
   const isLia = tx.category === "liability";
   const isSav = tx.category === "savings";
   const isSub = tx.category === "subscription";
-
-  // Find linked account
-  const linkedAccId = tx.accountId || tx.fundingAccountId || tx.targetAccountId;
-  const linkedAcc = accounts.find((a) => a.id === linkedAccId);
 
   const handleEditClick = () => {
     setEditingId(tx.id);
@@ -193,22 +188,12 @@ export const TransactionDetailModal: React.FC = () => {
               </div>
             </div>
 
-            {/* Date and Account Mappings */}
-            <div className="grid grid-cols-2 gap-3.5">
-              <div className="p-3.5 bg-zinc-900/20 border border-white/5 rounded-xl">
-                <span className="text-[9px] font-mono text-zinc-500 uppercase block">Starts On</span>
-                <span className="text-xs font-mono font-bold text-zinc-300 mt-1 block">
-                  {tx.startDate}
-                </span>
-              </div>
-              <div className="p-3.5 bg-zinc-900/20 border border-white/5 rounded-xl">
-                <span className="text-[9px] font-mono text-zinc-500 uppercase block">
-                  Linked Account
-                </span>
-                <span className="text-xs font-bold text-zinc-300 mt-1 block truncate">
-                  {linkedAcc ? linkedAcc.name : "Unassigned / All Accounts"}
-                </span>
-              </div>
+            {/* Date */}
+            <div className="p-3.5 bg-zinc-900/20 border border-white/5 rounded-xl">
+              <span className="text-[9px] font-mono text-zinc-500 uppercase block">Starts On</span>
+              <span className="text-xs font-mono font-bold text-zinc-300 mt-1 block">
+                {tx.startDate}
+              </span>
             </div>
 
             {/* Notes Section */}

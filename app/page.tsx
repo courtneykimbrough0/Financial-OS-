@@ -9,13 +9,11 @@ import {
   Coins,
   Clock,
   TrendingDown,
-  Wallet,
 } from "lucide-react";
 
 import { FinancialOSProvider, useFinancialData } from "@/components/FinancialOSContext";
 import OnboardingWizard from "@/components/OnboardingWizard";
 import Dashboard from "@/components/Dashboard";
-import AccountsTab from "@/components/AccountsTab";
 import IncomeTab from "@/components/IncomeTab";
 import ExpensesSavingsTab from "@/components/ExpensesSavingsTab";
 import LiabilitiesTab from "@/components/LiabilitiesTab";
@@ -25,14 +23,11 @@ import ProfileMenu from "@/components/ProfileMenu";
 // Dialog / Modal components
 import { ConfirmAlertDialogs } from "@/components/ConfirmAlertDialogs";
 import { TransactionDetailModal } from "@/components/TransactionDetailModal";
-import { AccountDeletionWizard } from "@/components/AccountDeletionWizard";
-import { AccountModal } from "@/components/AccountModal";
 import DayDetailModal from "@/components/DayDetailModal";
 import TransactionFormModal from "@/components/TransactionFormModal";
 
 const BOTTOM_TABS = [
   { id: "dashboard", label: "Dashboard", Icon: CalendarIcon, color: "text-indigo-400" },
-  { id: "accounts",  label: "Accounts",  Icon: Wallet,       color: "text-indigo-400" },
   { id: "income",    label: "Income",    Icon: Coins,        color: "text-emerald-400" },
   { id: "expenses",  label: "Expenses",  Icon: TrendingDown, color: "text-sky-400" },
   { id: "liabilities", label: "Liabilities", Icon: Clock,   color: "text-amber-400" },
@@ -42,7 +37,6 @@ function MainAppLayout() {
   const {
     loading,
     onboardingCompleted,
-    accounts,
     activeTab,
     setActiveTab,
     setExpenseSubTab,
@@ -94,18 +88,6 @@ function MainAppLayout() {
             >
               <CalendarIcon className="w-3.5 h-3.5 text-indigo-400" />
               <span>Dashboard</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("accounts")}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all text-xs font-semibold cursor-pointer ${
-                activeTab === "accounts"
-                  ? "bg-zinc-900 text-white border border-white/10 shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200 border border-transparent"
-              }`}
-            >
-              <Wallet className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Accounts ({accounts.length})</span>
             </button>
 
             <button
@@ -168,7 +150,6 @@ function MainAppLayout() {
       <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-8 select-none">
         <AnimatePresence mode="wait">
           {activeTab === "dashboard" && <Dashboard />}
-          {activeTab === "accounts" && <AccountsTab />}
           {activeTab === "income" && <IncomeTab />}
           {activeTab === "expenses" && <ExpensesSavingsTab />}
           {activeTab === "liabilities" && <LiabilitiesTab />}
@@ -217,8 +198,6 @@ function MainAppLayout() {
       <AnimatePresence>
         <ConfirmAlertDialogs />
         <TransactionDetailModal />
-        <AccountDeletionWizard />
-        <AccountModal />
         <DayDetailModal />
         <TransactionFormModal />
       </AnimatePresence>

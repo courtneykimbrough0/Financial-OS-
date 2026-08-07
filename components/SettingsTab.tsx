@@ -67,7 +67,7 @@ export const SettingsTab: React.FC = () => {
               Current Balance
             </label>
             <p className="text-xs text-zinc-500">
-              Your total cash balance across all accounts right now.
+              Your total spendable cash balance right now.
             </p>
           </div>
           <div className="flex items-center gap-2">
