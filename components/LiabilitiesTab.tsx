@@ -7,17 +7,12 @@ import {
   Plus,
   DollarSign,
   Calendar as CalendarIcon,
-  Percent,
   CreditCard,
   Info,
   CheckCircle,
 } from "lucide-react";
 import { useFinancialData } from "./FinancialOSContext";
-import {
-  calculatePayoffDetails,
-  getMonthlyEquivalent,
-  getQuarterlyEquivalent,
-} from "@/lib/forecast";
+import { getMonthlyEquivalent } from "@/lib/forecast";
 
 export const LiabilitiesTab: React.FC = () => {
   const {
@@ -65,7 +60,7 @@ export const LiabilitiesTab: React.FC = () => {
 
       {/* Aggregated Liabilities Summary Ribbon */}
       {liabilities.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-zinc-900/60 border border-white/10 rounded-2xl animate-fade-in">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-zinc-900/60 border border-white/10 rounded-2xl animate-fade-in">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
               <DollarSign className="w-5 h-5" />
@@ -96,29 +91,6 @@ export const LiabilitiesTab: React.FC = () => {
               </div>
             </div>
           </div>
-
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
-              <Percent className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-[10px] font-mono text-zinc-400 uppercase">Average Interest Rate</div>
-              <div className="text-base font-bold font-mono text-zinc-200">
-                {(() => {
-                  const activeLias = liabilities.filter((t) => (t.currentBalance || 0) > 0);
-                  if (activeLias.length === 0) return "0.0%";
-                  const totalBal = activeLias.reduce((acc, t) => acc + (t.currentBalance || 0), 0);
-                  if (totalBal === 0) return "0.0%";
-                  const weightedApr =
-                    activeLias.reduce(
-                      (acc, t) => acc + (t.currentBalance || 0) * (t.interestRate || 0),
-                      0
-                    ) / totalBal;
-                  return `${weightedApr.toFixed(1)}%`;
-                })()}
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
@@ -134,7 +106,6 @@ export const LiabilitiesTab: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {liabilities.map((tx) => {
-            const details = calculatePayoffDetails(tx);
             const bal = tx.currentBalance !== undefined ? tx.currentBalance : 0;
             const limit = tx.creditLimit || 0;
             const utilization = limit > 0 ? Math.round((bal / limit) * 100) : 0;
@@ -187,19 +158,11 @@ export const LiabilitiesTab: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Payoff Status Badge */}
-                    {isPaidOff ? (
+                    {/* Paid Off Badge */}
+                    {isPaidOff && (
                       <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
                         <CheckCircle className="w-3 h-3 text-emerald-400" />
                         PAID OFF
-                      </span>
-                    ) : details.monthsToPayoff !== null ? (
-                      <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-lg">
-                        Payoff: {details.payoffDateStr}
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-mono font-bold text-orange-400 bg-orange-500/15 border border-orange-500/30 px-2.5 py-0.5 rounded-lg">
-                        Balance Growing
                       </span>
                     )}
                   </div>
