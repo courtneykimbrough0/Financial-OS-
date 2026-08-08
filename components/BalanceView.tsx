@@ -217,7 +217,7 @@ export const BalanceView: React.FC = () => {
             <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
               <Wallet className="w-4 h-4" />
             </div>
-            <h3 className="text-sm font-bold text-white">Cash Flow Outlook</h3>
+            <h3 className="text-sm font-bold text-white">Cash Flow</h3>
           </div>
           <span
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono uppercase border ${
