@@ -11,6 +11,7 @@ export function validateTransactionInput(
     notes?: string;
     dayOfMonth?: string;
     movableDueDate?: boolean;
+    tags?: string | string[];
   }
 ): { success: true; data: Omit<RecurringTransaction, "id"> & { id?: string } } | { success: false; error: string } {
   if (!input.title.trim()) {
@@ -64,6 +65,19 @@ export function validateTransactionInput(
   if (input.category === "liability") {
     tx.dayOfMonth = input.dayOfMonth || undefined;
     tx.movableDueDate = input.movableDueDate;
+  }
+
+  if (input.category === "savings") {
+    let tags: string[] | undefined;
+    if (typeof input.tags === "string") {
+      tags = input.tags
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    } else if (Array.isArray(input.tags)) {
+      tags = input.tags.map((s) => s.trim()).filter((s) => s.length > 0);
+    }
+    tx.tags = tags && tags.length > 0 ? tags : undefined;
   }
 
   return { success: true, data: tx };

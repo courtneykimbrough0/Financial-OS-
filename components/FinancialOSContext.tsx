@@ -126,7 +126,8 @@ interface FinancialOSContextType {
     wizSavingsTitle: string,
     wizSavingsAmount: string,
     wizSavingsFrequency: string,
-    wizSavingsStartDate: string
+    wizSavingsStartDate: string,
+    wizSavingsTags?: string
   ) => Promise<boolean>;
   handleClearAllData: () => void;
   signOut: () => Promise<void>;
@@ -672,7 +673,8 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     wizSavingsTitle: string,
     wizSavingsAmount: string,
     wizSavingsFrequency: string,
-    wizSavingsStartDate: string
+    wizSavingsStartDate: string,
+    wizSavingsTags: string = ""
   ): Promise<boolean> => {
     if (!userId) return false;
     setIsSaving(true);
@@ -685,12 +687,17 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
       if (wizSavingsEnabled && wizSavingsTitle.trim()) {
         const svAmt = parseFloat(wizSavingsAmount);
         if (svAmt > 0) {
+          const tags = wizSavingsTags
+            .split(",")
+            .map((t) => t.trim())
+            .filter((t) => t.length > 0);
           finalTxs.push({
             title: wizSavingsTitle.trim(),
             amount: svAmt,
             startDate: wizSavingsStartDate || todayStr,
             frequency: wizSavingsFrequency as any,
             category: "savings",
+            tags: tags.length > 0 ? tags : undefined,
           });
         }
       }

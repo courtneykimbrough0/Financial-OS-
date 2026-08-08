@@ -14,6 +14,7 @@ export function mapTransactionFromDb(row: any): RecurringTransaction {
     dayOfMonth: row.day_of_month || undefined,
     movableDueDate: row.movable_due_date !== null && row.movable_due_date !== undefined ? Boolean(row.movable_due_date) : undefined,
     endDate: row.end_date || undefined,
+    tags: row.tags && row.tags.length > 0 ? row.tags : undefined,
   };
 }
 
@@ -34,6 +35,7 @@ export function mapTransactionToDb(
     day_of_month: tx.dayOfMonth || null,
     movable_due_date: tx.movableDueDate !== undefined ? tx.movableDueDate : null,
     end_date: tx.endDate || null,
+    tags: tx.tags && tx.tags.length > 0 ? tx.tags : null,
   };
 }
 

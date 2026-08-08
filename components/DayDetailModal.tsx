@@ -184,6 +184,15 @@ export const DayDetailModal: React.FC = () => {
                                   Modified
                                 </span>
                               )}
+                              {t.item.category === "savings" &&
+                                t.item.tags?.map((tag) => (
+                                  <span
+                                    key={tag}
+                                    className="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-300 text-[9px] rounded-md font-bold uppercase tracking-wider"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
                             </div>
                             <div className="text-[9px] text-zinc-500 uppercase font-mono mt-0.5 flex items-center gap-2">
                               <span>{t.item.category}</span>

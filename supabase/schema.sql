@@ -96,6 +96,11 @@ create table if not exists public.transactions (
   -- Consumed by a later guidance-shell issue.
   movable_due_date boolean,
 
+  -- Savings-only: free-form user-entered tags (e.g. "Trip", "Christmas") for
+  -- purpose-tracking a savings contribution stream. Purely organizational —
+  -- no forecast/date-math reads this column. See issue #63.
+  tags text[],
+
   created_at timestamptz not null default now()
 );
 
@@ -263,3 +268,13 @@ alter table public.transactions add constraint transactions_category_check
 -- alter table public.transactions drop column if exists funding_account_id;
 -- alter table public.transactions drop column if exists target_account_id;
 -- drop table if exists public.accounts;
+
+-- ---------------------------------------------------------------------------
+-- Migration handoff (issue #63) — free-form user tags on savings
+-- contributions, replacing the removed savings account picker (issue #61).
+-- `create table if not exists` above only affects fresh installs; an
+-- existing live project needs this applied directly.
+-- ---------------------------------------------------------------------------
+
+-- Apply now — new column the app writes to as of this issue:
+alter table public.transactions add column if not exists tags text[];

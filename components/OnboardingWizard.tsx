@@ -60,6 +60,7 @@ export const OnboardingWizard: React.FC = () => {
   const [wizSavingsAmount, setWizSavingsAmount] = useState<string>("");
   const [wizSavingsFrequency, setWizSavingsFrequency] = useState<string>("monthly");
   const [wizSavingsStartDate, setWizSavingsStartDate] = useState<string>("");
+  const [wizSavingsTags, setWizSavingsTags] = useState<string>("");
 
   const handleLoadSampleData = async () => {
     setWizError(null);
@@ -74,7 +75,8 @@ export const OnboardingWizard: React.FC = () => {
       wizSavingsTitle,
       wizSavingsAmount,
       wizSavingsFrequency,
-      wizSavingsStartDate
+      wizSavingsStartDate,
+      wizSavingsTags
     );
     if (!success) {
       setWizError("An error occurred while establishing your workspace. Please try again.");
@@ -1045,6 +1047,22 @@ export const OnboardingWizard: React.FC = () => {
                         />
                       </div>
                     </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
+                        Tags (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Trip, Christmas, Insurance"
+                        value={wizSavingsTags}
+                        onChange={(e) => setWizSavingsTags(e.target.value)}
+                        className="bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                      />
+                      <p className="text-[10px] text-zinc-500">
+                        Comma-separated. What this savings is for — entirely up to you, no presets.
+                      </p>
+                    </div>
                   </motion.div>
                 )}
 
@@ -1147,13 +1165,25 @@ export const OnboardingWizard: React.FC = () => {
                           <div className="flex justify-between items-center text-xs p-2 rounded-xl bg-cyan-950/20 border border-cyan-500/10">
                             <div>
                               <p className="font-semibold text-cyan-300">{wizSavingsTitle.trim()}</p>
-                              <div className="flex items-center gap-1.5 mt-0.5">
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                 <span className="text-[8px] font-bold font-mono px-1 rounded uppercase bg-cyan-500/10 text-cyan-400 border border-cyan-500/15">
                                   Savings Target
                                 </span>
                                 <span className="text-[9px] text-cyan-500 font-mono capitalize">
                                   {wizSavingsFrequency}
                                 </span>
+                                {wizSavingsTags
+                                  .split(",")
+                                  .map((t) => t.trim())
+                                  .filter((t) => t.length > 0)
+                                  .map((t) => (
+                                    <span
+                                      key={t}
+                                      className="text-[8px] font-bold font-mono px-1.5 py-0.5 rounded uppercase bg-cyan-500/10 text-cyan-300 border border-cyan-500/15"
+                                    >
+                                      {t}
+                                    </span>
+                                  ))}
                               </div>
                             </div>
                             <span className="font-bold font-mono text-cyan-400">
