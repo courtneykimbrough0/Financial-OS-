@@ -328,7 +328,7 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setIsSaving(true);
     const validatedData = valResult.data;
     const isEdit = !!txInput.id;
-    const previousTransactions = [...transactions];
+    const existingTx = isEdit ? transactions.find((t) => t.id === txInput.id) ?? null : null;
 
     // Optimistic Update
     const tempId = txInput.id || crypto.randomUUID();
@@ -355,7 +355,10 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setIsSaving(false);
       return true;
     } catch (err: any) {
-      setTransactions(previousTransactions); // Rollback
+      // Rollback: restore only this transaction, not the whole array
+      setTransactions((prev) =>
+        existingTx ? prev.map((t) => (t.id === existingTx.id ? existingTx : t)) : prev.filter((t) => t.id !== tempId)
+      );
       setAlertMessage(err.message || "Failed to save transaction to database.");
       setIsSaving(false);
       return false;
@@ -366,7 +369,7 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (!userId) return false;
     setIsSaving(true);
 
-    const previousTransactions = [...transactions];
+    const existingTx = transactions.find((t) => t.id === txId) ?? null;
 
     // Optimistic Update
     setTransactions((prev) => prev.filter((t) => t.id !== txId));
@@ -376,7 +379,10 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setIsSaving(false);
       return true;
     } catch (err: any) {
-      setTransactions(previousTransactions); // Rollback
+      // Rollback: restore only this transaction, not the whole array
+      setTransactions((prev) =>
+        existingTx && !prev.some((t) => t.id === existingTx.id) ? [...prev, existingTx] : prev
+      );
       setAlertMessage(err.message || "Failed to delete transaction from database.");
       setIsSaving(false);
       return false;
@@ -414,7 +420,6 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const existingIndex = transactionOverrides.findIndex(
       (o) => o.transactionId === transactionId && o.dateStr === dateStr
     );
-    const previousOverrides = [...transactionOverrides];
     let newOverrides = [...transactionOverrides];
 
     const isExisting = existingIndex > -1;
@@ -466,7 +471,12 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
         );
       }
     } catch (err: any) {
-      setTransactionOverrides(previousOverrides); // Rollback
+      // Rollback: restore only this override, not the whole array
+      setTransactionOverrides((prev) =>
+        existing
+          ? prev.map((o) => (o.transactionId === transactionId && o.dateStr === dateStr ? existing : o))
+          : prev.filter((o) => !(o.transactionId === transactionId && o.dateStr === dateStr))
+      );
       setAlertMessage(err.message || "Failed to update override in database.");
     }
   };
@@ -477,7 +487,6 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const existingIndex = transactionOverrides.findIndex(
       (o) => o.transactionId === transactionId && o.dateStr === dateStr
     );
-    const previousOverrides = [...transactionOverrides];
     let newOverrides = [...transactionOverrides];
 
     const isExisting = existingIndex > -1;
@@ -528,7 +537,12 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
         );
       }
     } catch (err: any) {
-      setTransactionOverrides(previousOverrides);
+      // Rollback: restore only this override, not the whole array
+      setTransactionOverrides((prev) =>
+        existing
+          ? prev.map((o) => (o.transactionId === transactionId && o.dateStr === dateStr ? existing : o))
+          : prev.filter((o) => !(o.transactionId === transactionId && o.dateStr === dateStr))
+      );
       setAlertMessage(err.message || "Failed to skip transaction in database.");
     }
   };
@@ -543,10 +557,10 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const existingIndex = transactionOverrides.findIndex(
       (o) => o.transactionId === transactionId && o.dateStr === dateStr
     );
-    const previousOverrides = [...transactionOverrides];
     let newOverrides = [...transactionOverrides];
 
     const isExisting = existingIndex > -1;
+    const existing = isExisting ? transactionOverrides[existingIndex] : null;
     if (isExisting) {
       newOverrides[existingIndex] = {
         ...newOverrides[existingIndex],
@@ -580,15 +594,20 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
 
     try {
-      const payload = isExisting
-        ? { ...transactionOverrides[existingIndex], status: "modified" as const, customAmount: customAmt }
+      const payload = existing
+        ? { ...existing, status: "modified" as const, customAmount: customAmt }
         : { transactionId, dateStr, status: "modified" as const, customAmount: customAmt };
       const saved = await upsertOverride(supabase, payload, userId);
       setTransactionOverrides((prev) =>
         prev.map((o) => (o.transactionId === transactionId && o.dateStr === dateStr ? saved : o))
       );
     } catch (err: any) {
-      setTransactionOverrides(previousOverrides);
+      // Rollback: restore only this override, not the whole array
+      setTransactionOverrides((prev) =>
+        existing
+          ? prev.map((o) => (o.transactionId === transactionId && o.dateStr === dateStr ? existing : o))
+          : prev.filter((o) => !(o.transactionId === transactionId && o.dateStr === dateStr))
+      );
       setAlertMessage(err.message || "Failed to save modified amount override.");
     }
   };
@@ -600,7 +619,6 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
   ): Promise<boolean> => {
     if (!userId) return false;
 
-    const previousOverrides = [...transactionOverrides];
     try {
       const saved = await upsertSplitOverride(supabase, transactionId, dueDateStr, parts, userId);
 
@@ -617,7 +635,7 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
           numberOfDays: 120,
           initialBalance: currentBalance ?? 0,
           transactions,
-          overrides: [...previousOverrides.filter(
+          overrides: [...transactionOverrides.filter(
             (o) => !(o.transactionId === transactionId && o.dateStr === dueDateStr)
           ), saved],
         });
@@ -627,7 +645,9 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
       return true;
     } catch (err: any) {
-      setTransactionOverrides(previousOverrides);
+      // No optimistic write was applied before the request, so there is
+      // nothing to roll back here — doing so would risk stomping an
+      // unrelated concurrent update to transactionOverrides.
       setAlertMessage(err.message || "Failed to save split payment.");
       return false;
     }
@@ -643,7 +663,9 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setIsSaving(false);
       return true;
     } catch (err: any) {
-      setCurrentBalance(previous);
+      // Rollback only if nothing else has updated the balance since this
+      // call's optimistic set — otherwise we'd stomp a newer, already-saved value.
+      setCurrentBalance((current) => (current === value ? previous : current));
       setAlertMessage(err.message || "Failed to update current balance.");
       setIsSaving(false);
       return false;
@@ -660,7 +682,9 @@ export const FinancialOSProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setIsSaving(false);
       return true;
     } catch (err: any) {
-      setLowBalanceAlert(previous);
+      // Rollback only if nothing else has updated the threshold since this
+      // call's optimistic set — otherwise we'd stomp a newer, already-saved value.
+      setLowBalanceAlert((current) => (current === value ? previous : current));
       setAlertMessage(err.message || "Failed to update low balance alert threshold.");
       setIsSaving(false);
       return false;
