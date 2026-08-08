@@ -450,12 +450,21 @@ export const Dashboard: React.FC = () => {
                                       </span>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                     <span
                                       className={`text-[9px] font-bold font-mono tracking-wider px-1.5 py-0.5 rounded border ${catColorClass}`}
                                     >
                                       {t.item.category.replace("-", " ")}
                                     </span>
+                                    {isSavings &&
+                                      t.item.tags?.map((tag) => (
+                                        <span
+                                          key={tag}
+                                          className="text-[9px] font-bold font-mono tracking-wider px-1.5 py-0.5 rounded border text-cyan-300 bg-cyan-500/10 border-cyan-500/20"
+                                        >
+                                          {tag}
+                                        </span>
+                                      ))}
                                   </div>
                                 </div>
                               </div>

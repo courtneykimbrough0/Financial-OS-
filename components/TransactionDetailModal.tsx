@@ -196,6 +196,25 @@ export const TransactionDetailModal: React.FC = () => {
               </span>
             </div>
 
+            {/* Tags Section (savings only) */}
+            {isSav && tx.tags && tx.tags.length > 0 && (
+              <div className="space-y-1.5 border-t border-white/5 pt-4">
+                <span className="text-[10px] font-bold font-mono tracking-wider text-zinc-400 uppercase">
+                  Tags
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {tx.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-[10px] font-mono font-bold text-cyan-300 uppercase bg-cyan-500/10 px-2.5 py-1 rounded-lg border border-cyan-500/20 inline-block"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Notes Section */}
             {tx.notes && (
               <div className="space-y-1.5 border-t border-white/5 pt-4">

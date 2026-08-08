@@ -45,6 +45,7 @@ export const TransactionFormModal: React.FC = () => {
   const [formFrequency, setFormFrequency] = useState<string>("monthly");
   const [formSemiDays, setFormSemiDays] = useState<string>("1,15");
   const [formNotes, setFormNotes] = useState<string>("");
+  const [formTags, setFormTags] = useState<string>("");
 
   // Liability-specific inputs local state
   const [formDayOfMonth, setFormDayOfMonth] = useState<string>("1");
@@ -66,6 +67,7 @@ export const TransactionFormModal: React.FC = () => {
           setFormDayOfMonth(tx.dayOfMonth || "1");
           setFormMovableDueDate(!!tx.movableDueDate);
           setFormMarkPaidOffDate(formatDateLocal(new Date()));
+          setFormTags(tx.tags ? tx.tags.join(", ") : "");
         }
       } else {
         setFormTitle("");
@@ -77,6 +79,7 @@ export const TransactionFormModal: React.FC = () => {
         setFormDayOfMonth("1");
         setFormMovableDueDate(false);
         setFormMarkPaidOffDate("");
+        setFormTags("");
       }
       setWizardStep(1);
       setWizardError(null);
@@ -117,6 +120,7 @@ export const TransactionFormModal: React.FC = () => {
       notes: formNotes,
       dayOfMonth: formDayOfMonth,
       movableDueDate: formMovableDueDate,
+      tags: formTags,
     });
 
     if (success) {
@@ -686,6 +690,25 @@ export const TransactionFormModal: React.FC = () => {
                       />
                     </div>
 
+                    {formCategory === "savings" && (
+                      <div>
+                        <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
+                          Tags (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          disabled={isSaving}
+                          placeholder="e.g. Trip, Christmas, Insurance"
+                          value={formTags}
+                          onChange={(e) => setFormTags(e.target.value)}
+                          className="block w-full px-3.5 py-2.5 text-xs bg-black/40 border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500 text-zinc-100 transition-colors"
+                        />
+                        <p className="text-[10px] text-zinc-500 mt-1">
+                          Comma-separated. What this savings is for — entirely up to you, no presets.
+                        </p>
+                      </div>
+                    )}
+
                     <div>
                       <label className="block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
                         Notes (Optional)
@@ -725,6 +748,18 @@ export const TransactionFormModal: React.FC = () => {
                         <span>Next Due Date:</span>
                         <span className="font-semibold text-white font-mono">{formStartDate}</span>
                       </div>
+                      {formCategory === "savings" && formTags.trim() && (
+                        <div className="flex justify-between text-zinc-300">
+                          <span>Tags:</span>
+                          <span className="font-semibold text-cyan-400 font-mono text-right">
+                            {formTags
+                              .split(",")
+                              .map((t) => t.trim())
+                              .filter((t) => t.length > 0)
+                              .join(", ")}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex justify-between items-center pt-4 border-t border-white/5 mt-4">

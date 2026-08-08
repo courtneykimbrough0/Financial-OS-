@@ -26,6 +26,7 @@ export interface RecurringTransaction {
   dayOfMonth?: string; // Due day of month (e.g. "1".."31" or "Last")
   movableDueDate?: boolean; // Liability-only: whether this due date can be nudged (consumed by a later guidance issue)
   endDate?: string; // Ending date (YYYY-MM-DD) when the recurring transaction stops occurring
+  tags?: string[]; // Savings-only: free-form user-entered tags (e.g. "Trip", "Christmas") — purely organizational, no effect on forecast math
 }
 
 export interface ForecastDay {

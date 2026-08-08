@@ -249,9 +249,19 @@ export const ExpensesSavingsTab: React.FC = () => {
                         <h4 className="text-base font-bold text-white group-hover:text-cyan-300 transition-colors">
                           {tx.title}
                         </h4>
-                        <span className="text-xs font-mono font-bold text-zinc-300 uppercase bg-black/60 px-2.5 py-0.5 rounded-lg border border-white/10 inline-block mt-1">
-                          {tx.frequency}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          <span className="text-xs font-mono font-bold text-zinc-300 uppercase bg-black/60 px-2.5 py-0.5 rounded-lg border border-white/10 inline-block">
+                            {tx.frequency}
+                          </span>
+                          {tx.tags?.map((tag) => (
+                            <span
+                              key={tag}
+                              className="text-[10px] font-mono font-bold text-cyan-300 uppercase bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/20 inline-block"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                       <div className="text-right">
                         <span className="text-base font-mono font-bold text-cyan-400 block">
