@@ -1397,7 +1397,7 @@ export const OnboardingWizard: React.FC = () => {
                     </div>
 
                     <div className="mt-4 p-3 rounded-xl bg-zinc-900/60 border border-white/10 text-[11px] text-zinc-400 space-y-1 leading-relaxed font-sans font-medium">
-                      <p className="font-semibold text-zinc-300">💡 Standardized Budgeting Baseline Note:</p>
+                      <p className="font-semibold text-zinc-300">💡 Standardized Baseline Note:</p>
                       <p>
                         Monthly baselines assume 2 paychecks/mo for bi-weekly and 4 payweeks/mo for
                         weekly.
