@@ -565,7 +565,7 @@ export const TransactionFormModal: React.FC = () => {
                         }}
                         placeholder={
                           formCategory === "fixed-expense"
-                            ? "e.g. Rent, Electricity, Grocery Budget"
+                            ? "e.g. Rent, Electricity, Groceries"
                             : formCategory === "subscription"
                             ? "e.g. Netflix, Spotify, iCloud Storage"
                             : "e.g. Liquid Reserve, High-Yield Savings"
