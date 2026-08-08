@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useFinancialData } from "./FinancialOSContext";
 import { generateForecast, formatDateLocal, ForecastDay } from "@/lib/forecast";
-import { FlowViewPlaceholder } from "./FlowViewPlaceholder";
+import { BalanceView } from "./BalanceView";
 
 function getMondayOfWeek(d: Date): Date {
   const day = d.getDay();
@@ -254,7 +254,7 @@ export const Dashboard: React.FC = () => {
           <span
             className={`text-3xl font-black font-mono tabular-nums leading-none ${
               activeMetrics.spending < 0
-                ? "text-red-400"
+                ? "text-orange-400"
                 : activeMetrics.spending < 100
                 ? "text-amber-400"
                 : "text-emerald-400"
@@ -723,7 +723,7 @@ export const Dashboard: React.FC = () => {
           transition={{ duration: 0.2 }}
           className="flex flex-col gap-6"
         >
-          <FlowViewPlaceholder />
+          <BalanceView />
         </motion.div>
       )}
     </motion.div>
